@@ -3,8 +3,10 @@ package com.vanbora.api.modules.auth.dto;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
+import java.util.List;
 
-/** Dados de cadastro do transportador (etapa 1). */
+/** Dados de cadastro do transportador (dados pessoais/veículo + área e preço). */
 public record RegisterTransporterRequest(
         @NotBlank String name,
         @NotBlank @Email String email,
@@ -13,6 +15,9 @@ public record RegisterTransporterRequest(
         String document,
         String cnh,
         String plate,
-        Integer capacity
+        Integer capacity,
+        List<String> schools,
+        List<String> neighborhoods,
+        BigDecimal baseMonthlyFee
 ) {
 }

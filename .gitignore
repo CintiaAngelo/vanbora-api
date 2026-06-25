@@ -14,5 +14,8 @@ target/
 # Logs
 *.log
 
+# Uploaded media (runtime storage, not source)
+uploads/
+
 # OS
 .DS_Store

@@ -1,21 +1,24 @@
 package com.vanbora.api.modules.hire.service;
 
-import com.vanbora.api.modules.enrollment.domain.Enrollment;
-import com.vanbora.api.modules.enrollment.repository.EnrollmentRepository;
 import com.vanbora.api.modules.guardian.domain.Dependent;
 import com.vanbora.api.modules.guardian.domain.GuardianProfile;
 import com.vanbora.api.modules.guardian.repository.DependentRepository;
 import com.vanbora.api.modules.guardian.repository.GuardianProfileRepository;
+import com.vanbora.api.modules.hire.domain.Contract;
 import com.vanbora.api.modules.hire.domain.HireRequest;
 import com.vanbora.api.modules.hire.dto.CreateHireRequest;
 import com.vanbora.api.modules.hire.dto.HireRequestResponse;
+import com.vanbora.api.modules.hire.repository.ContractRepository;
 import com.vanbora.api.modules.hire.repository.HireRequestRepository;
+import com.vanbora.api.modules.notification.NotificationService;
 import com.vanbora.api.modules.transporter.domain.TransporterProfile;
 import com.vanbora.api.modules.transporter.repository.TransporterProfileRepository;
+import com.vanbora.api.shared.enums.ContractStatus;
 import com.vanbora.api.shared.enums.HireStatus;
 import com.vanbora.api.shared.exception.BusinessException;
 import com.vanbora.api.shared.exception.ResourceNotFoundException;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,19 +30,22 @@ public class HireServiceImpl implements HireService {
     private final GuardianProfileRepository guardianRepository;
     private final TransporterProfileRepository transporterRepository;
     private final DependentRepository dependentRepository;
-    private final EnrollmentRepository enrollmentRepository;
+    private final ContractRepository contractRepository;
+    private final NotificationService notificationService;
 
     public HireServiceImpl(
             HireRequestRepository hireRequestRepository,
             GuardianProfileRepository guardianRepository,
             TransporterProfileRepository transporterRepository,
             DependentRepository dependentRepository,
-            EnrollmentRepository enrollmentRepository) {
+            ContractRepository contractRepository,
+            NotificationService notificationService) {
         this.hireRequestRepository = hireRequestRepository;
         this.guardianRepository = guardianRepository;
         this.transporterRepository = transporterRepository;
         this.dependentRepository = dependentRepository;
-        this.enrollmentRepository = enrollmentRepository;
+        this.contractRepository = contractRepository;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -61,6 +67,13 @@ public class HireServiceImpl implements HireService {
         hire.setDependent(dependent);
         hire.setStatus(HireStatus.PENDING);
 
+        if (request.proposedFee() != null) {
+            if (!transporter.isAcceptsProposals()) {
+                throw new BusinessException("Este transportador não aceita propostas de valor.");
+            }
+            hire.setProposedFee(request.proposedFee());
+        }
+
         return HireRequestResponse.from(hireRequestRepository.save(hire));
     }
 
@@ -80,12 +93,22 @@ public class HireServiceImpl implements HireService {
         HireRequest hire = requireOwnedRequest(transporterUserId, hireRequestId);
         hire.setStatus(HireStatus.ACCEPTED);
 
-        Enrollment enrollment = new Enrollment();
-        enrollment.setTransporter(hire.getTransporter());
-        enrollment.setDependent(hire.getDependent());
-        enrollment.setMonthlyFee(hire.getTransporter().getBaseMonthlyFee());
-        enrollment.setActive(true);
-        enrollmentRepository.save(enrollment);
+        // Liberar contrato: cria o contrato pendente e notifica o responsável.
+        // A matrícula só nasce quando o responsável assina (ContractService.sign).
+        Contract contract = new Contract();
+        contract.setHireRequest(hire);
+        contract.setGuardian(hire.getGuardian());
+        contract.setTransporter(hire.getTransporter());
+        contract.setDependent(hire.getDependent());
+        // Usa a proposta aceita pelo transportador, ou o valor de tabela quando não há proposta.
+        contract.setMonthlyFee(hire.getProposedFee() != null
+                ? hire.getProposedFee()
+                : hire.getTransporter().getBaseMonthlyFee());
+        contract.setStatus(ContractStatus.PENDING_SIGNATURE);
+        contract.setSignatureToken(UUID.randomUUID().toString().replace("-", ""));
+        contractRepository.save(contract);
+
+        notificationService.notifyContractReleased(contract);
     }
 
     @Override

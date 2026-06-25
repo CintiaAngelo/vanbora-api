@@ -30,6 +30,10 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = {
             "/api/auth/**",
+            // Imagens de perfil/ajudante servidas estaticamente (visíveis a responsáveis).
+            "/uploads/**",
+            // Handshake do WebSocket; a autenticação real ocorre no CONNECT do STOMP.
+            "/ws/**",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",

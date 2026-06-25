@@ -8,6 +8,11 @@ spring:
     password: ${DB_PASSWORD:Vanbora@123}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
+  servlet:
+    multipart:
+      max-file-size: 6MB
+      max-request-size: 6MB
+
   jpa:
     hibernate:
       ddl-auto: update
@@ -31,6 +36,18 @@ vanbora:
     expiration-millis: ${VANBORA_JWT_EXPIRATION:86400000}
   # Popula dados de demonstração na primeira execução (banco vazio).
   seed-demo-data: ${VANBORA_SEED:true}
+  # Link base usado nos e-mails (assinatura de contrato). Deep link do app por padrão.
+  app:
+    base-url: ${VANBORA_APP_BASE_URL:vanbora://app}
+  # Armazenamento de imagens enviadas (fotos de perfil/ajudante), servidas em /uploads.
+  uploads:
+    dir: ${VANBORA_UPLOADS_DIR:uploads}
+    public-path: /uploads
+  # Gateway de pagamento: "simulated" (default) ou "mercadopago".
+  payments:
+    provider: ${VANBORA_PAYMENTS_PROVIDER:simulated}
+    mercadopago:
+      access-token: ${MERCADOPAGO_ACCESS_TOKEN:}
 
 springdoc:
   swagger-ui:

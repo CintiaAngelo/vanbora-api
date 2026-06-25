@@ -4,6 +4,8 @@ import com.vanbora.api.modules.guardian.dto.CreateDependentRequest;
 import com.vanbora.api.modules.guardian.dto.DependentResponse;
 import com.vanbora.api.modules.guardian.dto.GuardianDashboardResponse;
 import com.vanbora.api.modules.guardian.dto.GuardianProfileResponse;
+import com.vanbora.api.modules.guardian.dto.GuardianTrackingResponse;
+import com.vanbora.api.modules.guardian.dto.UpdateAddressRequest;
 import com.vanbora.api.modules.guardian.service.GuardianService;
 import com.vanbora.api.modules.payment.dto.PaymentResponse;
 import com.vanbora.api.security.CurrentUserProvider;
@@ -14,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -37,6 +40,12 @@ public class GuardianController {
         return guardianService.getMyProfile(userId());
     }
 
+    /** Atualiza os endereços de embarque/entrega (e regeocodifica). */
+    @PutMapping("/address")
+    public GuardianProfileResponse updateAddress(@Valid @RequestBody UpdateAddressRequest request) {
+        return guardianService.updateAddress(userId(), request);
+    }
+
     @GetMapping("/dashboard")
     public GuardianDashboardResponse dashboard() {
         return guardianService.getDashboard(userId());
@@ -56,6 +65,12 @@ public class GuardianController {
     @GetMapping("/payments")
     public List<PaymentResponse> payments() {
         return guardianService.listPayments(userId());
+    }
+
+    /** Mapa em tempo real: posição atual do transportador contratado. */
+    @GetMapping("/tracking")
+    public GuardianTrackingResponse tracking() {
+        return guardianService.getTracking(userId());
     }
 
     private Long userId() {

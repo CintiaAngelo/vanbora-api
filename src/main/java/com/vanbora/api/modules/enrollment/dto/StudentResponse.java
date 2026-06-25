@@ -10,9 +10,10 @@ public record StudentResponse(
         String guardianName,
         String school,
         String neighborhood,
-        FinanceStatus financeStatus
+        FinanceStatus financeStatus,
+        boolean presentToday
 ) {
-    public static StudentResponse from(Enrollment e) {
+    public static StudentResponse from(Enrollment e, boolean presentToday) {
         var dependent = e.getDependent();
         var guardianUser = dependent.getGuardian().getUser();
         return new StudentResponse(
@@ -21,6 +22,7 @@ public record StudentResponse(
                 guardianUser.getName(),
                 dependent.getSchool(),
                 dependent.getGuardian().getNeighborhood(),
-                e.getFinanceStatus());
+                e.getFinanceStatus(),
+                presentToday);
     }
 }

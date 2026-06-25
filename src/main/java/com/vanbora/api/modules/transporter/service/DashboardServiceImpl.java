@@ -58,7 +58,7 @@ public class DashboardServiceImpl implements DashboardService {
         NoticeResponse recentNotice = noticeRepository
                 .findByTransporterIdOrderByCreatedAtDesc(transporterId).stream()
                 .findFirst()
-                .map(NoticeResponse::from)
+                .map(n -> NoticeResponse.from(n, java.util.List.of(), java.time.Instant.now(), 0, 0L))
                 .orElse(null);
 
         return new DashboardResponse(total, confirmed, absent, hireRequests, recentNotice);

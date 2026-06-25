@@ -9,10 +9,13 @@ public record RouteStopResponse(
         String label,
         String address,
         RouteStopStatus status,
-        int position
+        int position,
+        Double latitude,
+        Double longitude
 ) {
     public static RouteStopResponse from(RouteStop stop) {
         return new RouteStopResponse(
-                stop.getId(), stop.getLabel(), stop.getAddress(), stop.getStatus(), stop.getPosition());
+                stop.getId(), stop.getLabel(), stop.getAddress(), stop.getStatus(),
+                stop.getPosition(), stop.getLatitude(), stop.getLongitude());
     }
 }

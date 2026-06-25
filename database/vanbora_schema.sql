@@ -64,9 +64,50 @@ CREATE TABLE IF NOT EXISTS transporter_profiles (
     reviews_count     INT,
     base_monthly_fee  DECIMAL(10,2),
     available_seats   INT,
+    current_latitude  DOUBLE,
+    current_longitude DOUBLE,
+    location_updated_at DATETIME(6),
+    monthly_revenue_goal DECIMAL(10,2),
+    maintenance_interval_km INT,
+    last_maintenance_km DOUBLE,
     created_at        DATETIME(6) NOT NULL,
     updated_at        DATETIME(6) NOT NULL,
     CONSTRAINT fk_transporter_user FOREIGN KEY (user_id) REFERENCES users (id)
+);
+
+-- ---------- Financeiro do transportador ----------
+CREATE TABLE IF NOT EXISTS daily_distances (
+    id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+    transporter_id BIGINT NOT NULL,
+    date           DATE NOT NULL,
+    km             DOUBLE NOT NULL,
+    created_at     DATETIME(6) NOT NULL,
+    updated_at     DATETIME(6) NOT NULL,
+    CONSTRAINT uq_daily_distance UNIQUE (transporter_id, date),
+    CONSTRAINT fk_distance_transporter FOREIGN KEY (transporter_id) REFERENCES transporter_profiles (id)
+);
+
+CREATE TABLE IF NOT EXISTS expenses (
+    id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+    transporter_id BIGINT NOT NULL,
+    date           DATE NOT NULL,
+    category       VARCHAR(60) NOT NULL,
+    description    VARCHAR(200),
+    amount         DECIMAL(10,2) NOT NULL,
+    created_at     DATETIME(6) NOT NULL,
+    updated_at     DATETIME(6) NOT NULL,
+    CONSTRAINT fk_expense_transporter FOREIGN KEY (transporter_id) REFERENCES transporter_profiles (id)
+);
+
+CREATE TABLE IF NOT EXISTS fuel_entries (
+    id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+    transporter_id BIGINT NOT NULL,
+    date           DATE NOT NULL,
+    liters         DOUBLE NOT NULL,
+    amount         DECIMAL(10,2) NOT NULL,
+    created_at     DATETIME(6) NOT NULL,
+    updated_at     DATETIME(6) NOT NULL,
+    CONSTRAINT fk_fuel_transporter FOREIGN KEY (transporter_id) REFERENCES transporter_profiles (id)
 );
 
 CREATE TABLE IF NOT EXISTS transporter_schools (
@@ -174,33 +215,128 @@ CREATE TABLE IF NOT EXISTS hire_requests (
 CREATE TABLE IF NOT EXISTS notices (
     id               BIGINT AUTO_INCREMENT PRIMARY KEY,
     transporter_id   BIGINT NOT NULL,
+    title            VARCHAR(120),
     message          VARCHAR(600) NOT NULL,
     recipients_count INT NOT NULL,
+    publish_at       DATETIME(6),
+    allow_comments   BIT(1),
+    priority         VARCHAR(16),
+    audience_all     BIT(1),
     created_at       DATETIME(6) NOT NULL,
     updated_at       DATETIME(6) NOT NULL,
     CONSTRAINT fk_notice_transporter FOREIGN KEY (transporter_id) REFERENCES transporter_profiles (id)
+);
+
+-- Destinatários específicos de um aviso segmentado (só quando audience_all = 0).
+CREATE TABLE IF NOT EXISTS notice_recipients (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    notice_id   BIGINT NOT NULL,
+    guardian_id BIGINT NOT NULL,
+    created_at  DATETIME(6) NOT NULL,
+    updated_at  DATETIME(6) NOT NULL,
+    CONSTRAINT uq_notice_recipient UNIQUE (notice_id, guardian_id),
+    CONSTRAINT fk_recipient_notice   FOREIGN KEY (notice_id)   REFERENCES notices (id),
+    CONSTRAINT fk_recipient_guardian FOREIGN KEY (guardian_id) REFERENCES guardian_profiles (id)
+);
+
+-- Reação (1 emoji) de um responsável a um aviso (única por aviso+usuário).
+CREATE TABLE IF NOT EXISTS notice_reactions (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    notice_id  BIGINT NOT NULL,
+    user_id    BIGINT NOT NULL,
+    emoji      VARCHAR(16) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    CONSTRAINT uq_notice_reaction UNIQUE (notice_id, user_id),
+    CONSTRAINT fk_reaction_notice FOREIGN KEY (notice_id) REFERENCES notices (id),
+    CONSTRAINT fk_reaction_user   FOREIGN KEY (user_id)   REFERENCES users (id)
+);
+
+-- Comentários dos responsáveis em um aviso.
+CREATE TABLE IF NOT EXISTS notice_comments (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    notice_id  BIGINT NOT NULL,
+    user_id    BIGINT NOT NULL,
+    text       VARCHAR(600) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    CONSTRAINT fk_comment_notice FOREIGN KEY (notice_id) REFERENCES notices (id),
+    CONSTRAINT fk_comment_user   FOREIGN KEY (user_id)   REFERENCES users (id)
+);
+
+-- Confirmação de leitura de um aviso por um responsável (única por aviso+usuário).
+CREATE TABLE IF NOT EXISTS notice_views (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    notice_id  BIGINT NOT NULL,
+    user_id    BIGINT NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    CONSTRAINT uq_notice_view UNIQUE (notice_id, user_id),
+    CONSTRAINT fk_view_notice FOREIGN KEY (notice_id) REFERENCES notices (id),
+    CONSTRAINT fk_view_user   FOREIGN KEY (user_id)   REFERENCES users (id)
 );
 
 -- ---------- Rota do dia ----------
 CREATE TABLE IF NOT EXISTS route_stops (
     id             BIGINT AUTO_INCREMENT PRIMARY KEY,
     transporter_id BIGINT NOT NULL,
+    dependent_id   BIGINT,
     label          VARCHAR(255) NOT NULL,
     address        VARCHAR(255) NOT NULL,
     status         VARCHAR(20) NOT NULL,
     position       INT NOT NULL,
+    latitude       DOUBLE,
+    longitude      DOUBLE,
     created_at     DATETIME(6) NOT NULL,
     updated_at     DATETIME(6) NOT NULL,
-    CONSTRAINT fk_routestop_transporter FOREIGN KEY (transporter_id) REFERENCES transporter_profiles (id)
+    CONSTRAINT fk_routestop_transporter FOREIGN KEY (transporter_id) REFERENCES transporter_profiles (id),
+    CONSTRAINT fk_routestop_dependent   FOREIGN KEY (dependent_id)   REFERENCES dependents (id)
+);
+
+-- ---------- Meios de pagamento (sem dados sensíveis: só token + bandeira + 4 dígitos) ----------
+CREATE TABLE IF NOT EXISTS payment_methods (
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    guardian_id   BIGINT NOT NULL,
+    type          VARCHAR(20) NOT NULL,
+    gateway_token VARCHAR(255) NOT NULL,
+    brand         VARCHAR(20) NOT NULL,
+    last4         VARCHAR(4) NOT NULL,
+    active        BIT(1) NOT NULL,
+    created_at    DATETIME(6) NOT NULL,
+    updated_at    DATETIME(6) NOT NULL,
+    CONSTRAINT fk_paymethod_guardian FOREIGN KEY (guardian_id) REFERENCES guardian_profiles (id)
+);
+
+-- ---------- Contratos (liberados pelo transportador, assinados pelo responsável) ----------
+CREATE TABLE IF NOT EXISTS contracts (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    hire_request_id BIGINT NOT NULL,
+    guardian_id     BIGINT NOT NULL,
+    transporter_id  BIGINT NOT NULL,
+    dependent_id    BIGINT NOT NULL,
+    monthly_fee     DECIMAL(10,2) NOT NULL,
+    status          VARCHAR(20) NOT NULL,
+    signature_token VARCHAR(255) NOT NULL UNIQUE,
+    signed_at       DATETIME(6),
+    enrollment_id   BIGINT,
+    created_at      DATETIME(6) NOT NULL,
+    updated_at      DATETIME(6) NOT NULL,
+    CONSTRAINT fk_contract_hire       FOREIGN KEY (hire_request_id) REFERENCES hire_requests (id),
+    CONSTRAINT fk_contract_guardian   FOREIGN KEY (guardian_id)     REFERENCES guardian_profiles (id),
+    CONSTRAINT fk_contract_transporter FOREIGN KEY (transporter_id) REFERENCES transporter_profiles (id),
+    CONSTRAINT fk_contract_dependent  FOREIGN KEY (dependent_id)    REFERENCES dependents (id),
+    CONSTRAINT fk_contract_enrollment FOREIGN KEY (enrollment_id)   REFERENCES enrollments (id)
 );
 
 -- ---------- Mensageria ----------
 CREATE TABLE IF NOT EXISTS conversations (
-    id             BIGINT AUTO_INCREMENT PRIMARY KEY,
-    guardian_id    BIGINT NOT NULL,
-    transporter_id BIGINT NOT NULL,
-    created_at     DATETIME(6) NOT NULL,
-    updated_at     DATETIME(6) NOT NULL,
+    id                       BIGINT AUTO_INCREMENT PRIMARY KEY,
+    guardian_id              BIGINT NOT NULL,
+    transporter_id           BIGINT NOT NULL,
+    guardian_last_read_at    DATETIME(6),
+    transporter_last_read_at DATETIME(6),
+    created_at               DATETIME(6) NOT NULL,
+    updated_at               DATETIME(6) NOT NULL,
     CONSTRAINT fk_conversation_guardian    FOREIGN KEY (guardian_id)    REFERENCES guardian_profiles (id),
     CONSTRAINT fk_conversation_transporter FOREIGN KEY (transporter_id) REFERENCES transporter_profiles (id)
 );

@@ -2,10 +2,15 @@ package com.vanbora.api.modules.chat.service;
 
 import com.vanbora.api.modules.chat.domain.Conversation;
 import com.vanbora.api.modules.chat.domain.Message;
+import com.vanbora.api.modules.chat.dto.ChatBroadcast;
 import com.vanbora.api.modules.chat.dto.ConversationResponse;
 import com.vanbora.api.modules.chat.dto.MessageResponse;
 import com.vanbora.api.modules.chat.repository.ConversationRepository;
 import com.vanbora.api.modules.chat.repository.MessageRepository;
+import com.vanbora.api.modules.guardian.domain.GuardianProfile;
+import com.vanbora.api.modules.guardian.repository.GuardianProfileRepository;
+import com.vanbora.api.modules.transporter.domain.TransporterProfile;
+import com.vanbora.api.modules.transporter.repository.TransporterProfileRepository;
 import com.vanbora.api.modules.user.domain.User;
 import com.vanbora.api.shared.enums.UserRole;
 import com.vanbora.api.shared.exception.BusinessException;
@@ -14,6 +19,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,11 +32,20 @@ public class ChatServiceImpl implements ChatService {
 
     private final ConversationRepository conversationRepository;
     private final MessageRepository messageRepository;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final GuardianProfileRepository guardianRepository;
+    private final TransporterProfileRepository transporterRepository;
 
     public ChatServiceImpl(ConversationRepository conversationRepository,
-                           MessageRepository messageRepository) {
+                           MessageRepository messageRepository,
+                           SimpMessagingTemplate messagingTemplate,
+                           GuardianProfileRepository guardianRepository,
+                           TransporterProfileRepository transporterRepository) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
+        this.messagingTemplate = messagingTemplate;
+        this.guardianRepository = guardianRepository;
+        this.transporterRepository = transporterRepository;
     }
 
     @Override
@@ -42,12 +57,45 @@ public class ChatServiceImpl implements ChatService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
+    public ConversationResponse startConversation(User guardianUser, Long transporterId) {
+        if (guardianUser.getRole() != UserRole.GUARDIAN) {
+            throw new BusinessException("Apenas responsáveis podem iniciar conversas.");
+        }
+        GuardianProfile guardian = guardianRepository.findByUserId(guardianUser.getId())
+                .orElseThrow(() -> ResourceNotFoundException.of("Perfil de responsável", guardianUser.getId()));
+        TransporterProfile transporter = transporterRepository.findById(transporterId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Transportador", transporterId));
+
+        Conversation conversation = conversationRepository
+                .findByGuardianIdAndTransporterId(guardian.getId(), transporter.getId())
+                .orElseGet(() -> {
+                    Conversation created = new Conversation();
+                    created.setGuardian(guardian);
+                    created.setTransporter(transporter);
+                    return conversationRepository.save(created);
+                });
+        return toPreview(conversation, guardianUser);
+    }
+
+    @Override
+    @Transactional
     public List<MessageResponse> listMessages(User currentUser, Long conversationId) {
-        requireParticipant(currentUser, conversationId);
-        return messageRepository.findByConversationIdOrderBySentAtAsc(conversationId).stream()
-                .map(m -> toMessage(m, currentUser))
-                .toList();
+        Conversation conversation = requireParticipant(currentUser, conversationId);
+        List<MessageResponse> result =
+                messageRepository.findByConversationIdOrderBySentAtAsc(conversationId).stream()
+                        .map(m -> toMessage(m, currentUser))
+                        .toList();
+        // Abrir a conversa marca-a como lida para este usuário.
+        touchLastRead(conversation, currentUser);
+        return result;
+    }
+
+    @Override
+    @Transactional
+    public void markRead(User currentUser, Long conversationId) {
+        Conversation conversation = requireParticipant(currentUser, conversationId);
+        touchLastRead(conversation, currentUser);
     }
 
     @Override
@@ -60,8 +108,20 @@ public class ChatServiceImpl implements ChatService {
         message.setSender(currentUser);
         message.setText(text);
         message.setSentAt(Instant.now());
+        Message saved = messageRepository.save(message);
 
-        return toMessage(messageRepository.save(message), currentUser);
+        // Push em tempo real para os participantes assinantes do tópico da conversa.
+        messagingTemplate.convertAndSend(
+                "/topic/conversations/" + conversationId,
+                new ChatBroadcast(
+                        conversationId,
+                        saved.getId(),
+                        saved.getText(),
+                        TIME_FORMAT.format(saved.getSentAt()),
+                        currentUser.getId(),
+                        currentUser.getName()));
+
+        return toMessage(saved, currentUser);
     }
 
     private List<Conversation> conversationsOf(User user) {
@@ -98,7 +158,31 @@ public class ChatServiceImpl implements ChatService {
                 otherName,
                 last == null ? "" : last.getText(),
                 last == null ? "" : TIME_FORMAT.format(last.getSentAt()),
-                0);
+                countUnread(conversation, currentUser));
+    }
+
+    /** Mensagens enviadas pelo OUTRO lado após a última leitura deste usuário. */
+    private int countUnread(Conversation conversation, User currentUser) {
+        Instant lastRead = lastReadOf(conversation, currentUser);
+        return (int) conversation.getMessages().stream()
+                .filter(m -> !m.getSender().getId().equals(currentUser.getId()))
+                .filter(m -> lastRead == null || m.getSentAt().isAfter(lastRead))
+                .count();
+    }
+
+    private Instant lastReadOf(Conversation conversation, User currentUser) {
+        return currentUser.getRole() == UserRole.GUARDIAN
+                ? conversation.getGuardianLastReadAt()
+                : conversation.getTransporterLastReadAt();
+    }
+
+    private void touchLastRead(Conversation conversation, User currentUser) {
+        if (currentUser.getRole() == UserRole.GUARDIAN) {
+            conversation.setGuardianLastReadAt(Instant.now());
+        } else {
+            conversation.setTransporterLastReadAt(Instant.now());
+        }
+        conversationRepository.save(conversation);
     }
 
     private MessageResponse toMessage(Message message, User currentUser) {

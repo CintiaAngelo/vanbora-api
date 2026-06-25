@@ -13,6 +13,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -38,6 +39,9 @@ public class TransporterProfile extends BaseEntity {
     private String plate;
     private Integer capacity;
 
+    @Column(name = "photo_url", length = 512)
+    private String photoUrl;
+
     @Column(name = "years_experience")
     private Integer yearsExperience = 0;
 
@@ -50,8 +54,38 @@ public class TransporterProfile extends BaseEntity {
     @Column(name = "base_monthly_fee", precision = 10, scale = 2)
     private BigDecimal baseMonthlyFee = BigDecimal.ZERO;
 
+    /** Se aceita propostas de valor do responsável. NULLABLE (ddl-auto): null ⇒ não. */
+    @Column(name = "accepts_proposals")
+    private Boolean acceptsProposals = false;
+
+    /** Considera nulo como "não aceita propostas". */
+    public boolean isAcceptsProposals() {
+        return Boolean.TRUE.equals(acceptsProposals);
+    }
+
     @Column(name = "available_seats")
     private Integer availableSeats = 0;
+
+    /** Última posição conhecida do transportador (atualizada pelo GPS do app). */
+    @Column(name = "current_latitude")
+    private Double currentLatitude;
+
+    @Column(name = "current_longitude")
+    private Double currentLongitude;
+
+    @Column(name = "location_updated_at")
+    private Instant locationUpdatedAt;
+
+    /** Configurações financeiras (nullable para o ddl-auto em tabela populada). */
+    @Column(name = "monthly_revenue_goal", precision = 10, scale = 2)
+    private BigDecimal monthlyRevenueGoal;
+
+    @Column(name = "maintenance_interval_km")
+    private Integer maintenanceIntervalKm;
+
+    /** Km acumulado registrado na última manutenção (para calcular o quanto falta). */
+    @Column(name = "last_maintenance_km")
+    private Double lastMaintenanceKm;
 
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "transporter_schools", joinColumns = @JoinColumn(name = "transporter_id"))

@@ -10,15 +10,23 @@ import com.vanbora.api.modules.guardian.dto.GuardianDashboardResponse;
 import com.vanbora.api.modules.guardian.dto.GuardianDashboardResponse.DayAttendance;
 import com.vanbora.api.modules.guardian.dto.GuardianDashboardResponse.TransporterNotice;
 import com.vanbora.api.modules.guardian.dto.GuardianProfileResponse;
+import com.vanbora.api.modules.guardian.dto.GuardianTrackingResponse;
+import com.vanbora.api.modules.guardian.dto.UpdateAddressRequest;
 import com.vanbora.api.modules.guardian.repository.DependentRepository;
 import com.vanbora.api.modules.guardian.repository.GuardianProfileRepository;
 import com.vanbora.api.modules.notice.repository.NoticeRepository;
 import com.vanbora.api.modules.payment.domain.Payment;
 import com.vanbora.api.modules.payment.dto.PaymentResponse;
 import com.vanbora.api.modules.payment.repository.PaymentRepository;
+import com.vanbora.api.modules.route.domain.RouteStop;
+import com.vanbora.api.modules.route.dto.RouteStopResponse;
+import com.vanbora.api.modules.route.repository.RouteStopRepository;
+import com.vanbora.api.modules.transporter.domain.TransporterProfile;
 import com.vanbora.api.shared.enums.PaymentStatus;
+import com.vanbora.api.shared.enums.RouteStopStatus;
 import com.vanbora.api.shared.exception.ResourceNotFoundException;
 import java.time.DayOfWeek;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,24 +53,40 @@ public class GuardianServiceImpl implements GuardianService {
     private final EnrollmentRepository enrollmentRepository;
     private final PaymentRepository paymentRepository;
     private final NoticeRepository noticeRepository;
+    private final RouteStopRepository routeStopRepository;
+    private final GuardianAddressService guardianAddressService;
 
     public GuardianServiceImpl(
             GuardianProfileRepository guardianRepository,
             DependentRepository dependentRepository,
             EnrollmentRepository enrollmentRepository,
             PaymentRepository paymentRepository,
-            NoticeRepository noticeRepository) {
+            NoticeRepository noticeRepository,
+            RouteStopRepository routeStopRepository,
+            GuardianAddressService guardianAddressService) {
         this.guardianRepository = guardianRepository;
         this.dependentRepository = dependentRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.paymentRepository = paymentRepository;
         this.noticeRepository = noticeRepository;
+        this.routeStopRepository = routeStopRepository;
+        this.guardianAddressService = guardianAddressService;
     }
 
     @Override
     @Transactional(readOnly = true)
     public GuardianProfileResponse getMyProfile(Long userId) {
         GuardianProfile guardian = resolve(userId);
+        return GuardianProfileResponse.from(guardian, mapDependents(guardian.getId()));
+    }
+
+    @Override
+    @Transactional
+    public GuardianProfileResponse updateAddress(Long userId, UpdateAddressRequest request) {
+        GuardianProfile guardian = resolve(userId);
+        guardianAddressService.apply(
+                guardian, request.pickup(), request.deliverySameAsPickup(), request.delivery());
+        guardianRepository.save(guardian);
         return GuardianProfileResponse.from(guardian, mapDependents(guardian.getId()));
     }
 
@@ -113,6 +137,71 @@ public class GuardianServiceImpl implements GuardianService {
                 .findByEnrollmentDependentGuardianIdOrderByReferenceMonthDesc(guardian.getId()).stream()
                 .map(PaymentResponse::from)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public GuardianTrackingResponse getTracking(Long userId) {
+        GuardianProfile guardian = resolve(userId);
+
+        Optional<Enrollment> enrollmentOpt =
+                enrollmentRepository.findFirstByDependentGuardianIdAndActiveTrue(guardian.getId());
+        if (enrollmentOpt.isEmpty()) {
+            return GuardianTrackingResponse.none();
+        }
+
+        Enrollment enrollment = enrollmentOpt.get();
+        TransporterProfile transporter = enrollment.getTransporter();
+        Long myDependentId = enrollment.getDependent().getId();
+        String mySchool = enrollment.getDependent().getSchool();
+
+        List<RouteStop> stops =
+                routeStopRepository.findByTransporterIdOrderByPositionAsc(transporter.getId());
+
+        // Apenas a parada do próprio dependente e a escola — nada de outros responsáveis.
+        RouteStop myStop = stops.stream()
+                .filter(s -> s.getDependent() != null && myDependentId.equals(s.getDependent().getId()))
+                .findFirst()
+                .orElse(null);
+        // A escola do próprio aluno (casando pelo nome); cai na primeira escola se não achar.
+        RouteStop schoolStop = stops.stream()
+                .filter(s -> s.getStatus() == RouteStopStatus.SCHOOL)
+                .filter(s -> mySchool != null && mySchool.equalsIgnoreCase(s.getLabel()))
+                .findFirst()
+                .orElseGet(() -> stops.stream()
+                        .filter(s -> s.getStatus() == RouteStopStatus.SCHOOL)
+                        .findFirst()
+                        .orElse(null));
+
+        // Ordem de embarque entre os alunos que VÃO hoje (por posição da rota).
+        List<RouteStop> activePickups = stops.stream()
+                .filter(s -> s.getStatus() == RouteStopStatus.GOING)
+                .sorted(Comparator.comparingInt(RouteStop::getPosition))
+                .toList();
+        boolean goingToday = myStop != null && myStop.getStatus() == RouteStopStatus.GOING;
+        Integer myOrder = null;
+        if (goingToday) {
+            for (int i = 0; i < activePickups.size(); i++) {
+                if (activePickups.get(i).getId().equals(myStop.getId())) {
+                    myOrder = i + 1;
+                    break;
+                }
+            }
+        }
+        Integer totalStops = activePickups.isEmpty() ? null : activePickups.size();
+
+        return new GuardianTrackingResponse(
+                true,
+                transporter.getUser().getName(),
+                enrollment.getDependent().getName(),
+                transporter.getCurrentLatitude(),
+                transporter.getCurrentLongitude(),
+                transporter.getLocationUpdatedAt(),
+                myStop != null ? RouteStopResponse.from(myStop) : null,
+                schoolStop != null ? RouteStopResponse.from(schoolStop) : null,
+                myOrder,
+                totalStops,
+                goingToday);
     }
 
     private List<DayAttendance> buildWeek(Enrollment enrollment) {

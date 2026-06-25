@@ -6,8 +6,15 @@ import com.vanbora.api.modules.chat.repository.ConversationRepository;
 import com.vanbora.api.modules.enrollment.domain.Attendance;
 import com.vanbora.api.modules.enrollment.domain.Enrollment;
 import com.vanbora.api.modules.enrollment.repository.EnrollmentRepository;
+import com.vanbora.api.modules.finance.domain.DailyDistance;
+import com.vanbora.api.modules.finance.domain.Expense;
+import com.vanbora.api.modules.finance.domain.FuelEntry;
+import com.vanbora.api.modules.finance.repository.DailyDistanceRepository;
+import com.vanbora.api.modules.finance.repository.ExpenseRepository;
+import com.vanbora.api.modules.finance.repository.FuelEntryRepository;
 import com.vanbora.api.modules.guardian.domain.Dependent;
 import com.vanbora.api.modules.guardian.domain.GuardianProfile;
+import com.vanbora.api.modules.guardian.repository.DependentRepository;
 import com.vanbora.api.modules.guardian.repository.GuardianProfileRepository;
 import com.vanbora.api.modules.hire.domain.HireRequest;
 import com.vanbora.api.modules.hire.repository.HireRequestRepository;
@@ -25,6 +32,7 @@ import com.vanbora.api.modules.user.domain.User;
 import com.vanbora.api.modules.user.repository.UserRepository;
 import com.vanbora.api.shared.enums.FinanceStatus;
 import com.vanbora.api.shared.enums.HireStatus;
+import com.vanbora.api.shared.enums.NoticePriority;
 import com.vanbora.api.shared.enums.PaymentStatus;
 import com.vanbora.api.shared.enums.RouteStopStatus;
 import com.vanbora.api.shared.enums.UserRole;
@@ -33,7 +41,9 @@ import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
@@ -54,6 +64,10 @@ public class DataSeeder {
 
     private static final String DEFAULT_PASSWORD = "123456";
 
+    /** Posição inicial de demonstração do transportador (centro de São Paulo). */
+    private static final double ROBERTO_START_LAT = -23.5600;
+    private static final double ROBERTO_START_LON = -46.6300;
+
     @Bean
     ApplicationRunner seedDemoData(
             @Value("${vanbora.seed-demo-data:true}") boolean enabled,
@@ -61,14 +75,25 @@ public class DataSeeder {
             GuardianProfileRepository guardianRepository,
             TransporterProfileRepository transporterRepository,
             EnrollmentRepository enrollmentRepository,
+            DependentRepository dependentRepository,
             NoticeRepository noticeRepository,
             RouteStopRepository routeStopRepository,
             ConversationRepository conversationRepository,
             HireRequestRepository hireRequestRepository,
+            ExpenseRepository expenseRepository,
+            FuelEntryRepository fuelEntryRepository,
+            DailyDistanceRepository dailyDistanceRepository,
             PasswordEncoder passwordEncoder) {
 
         return args -> {
-            if (!enabled || userRepository.count() > 0) {
+            if (!enabled) {
+                return;
+            }
+            if (userRepository.count() > 0) {
+                // Banco já populado: garante que os dados desta feature existam
+                // (coordenadas, vínculo parada→dependente e publishAt dos avisos).
+                backfillGeo(transporterRepository, routeStopRepository, dependentRepository);
+                backfillNotices(noticeRepository);
                 return;
             }
 
@@ -90,28 +115,23 @@ public class DataSeeder {
                     Set.of("Jardins", "Moema"));
             addPriceZone(roberto, "Standard", "Colégio Objetivo", new BigDecimal("380.00"),
                     Set.of("Saúde", "Ipiranga"));
+            // Posição inicial do transportador (será sobrescrita pelo GPS do app).
+            roberto.setCurrentLatitude(ROBERTO_START_LAT);
+            roberto.setCurrentLongitude(ROBERTO_START_LON);
+            roberto.setLocationUpdatedAt(Instant.now());
+            // Configurações financeiras de demonstração.
+            roberto.setMonthlyRevenueGoal(new BigDecimal("5000.00"));
+            roberto.setMaintenanceIntervalKm(5000);
+            roberto.setLastMaintenanceKm(0.0);
             transporterRepository.save(roberto);
-
-            // ----- Outros transportadores (resultados de busca) -----
-            TransporterProfile joao = buildTransporter(
-                    userRepository, password, "João Silva", "joao@vanbora.com",
-                    "JKL-2M45", "••• ••• 2222", 12, 6, new BigDecimal("4.80"), 3,
-                    new BigDecimal("340.00"), 3,
-                    Set.of("Colégio São Paulo"), Set.of("Ipiranga"));
-            transporterRepository.save(joao);
-
-            TransporterProfile maria = buildTransporter(
-                    userRepository, password, "Maria Oliveira", "maria@vanbora.com",
-                    "MNO-3P67", "••• ••• 3333", 10, 4, new BigDecimal("4.20"), 1,
-                    new BigDecimal("280.00"), 1,
-                    Set.of("Colégio São Paulo"), Set.of("Ipiranga"));
-            transporterRepository.save(maria);
 
             // ----- Responsáveis -----
             GuardianProfile mariana = buildGuardian(
                     userRepository, password, "Mariana Costa", "mariana@vanbora.com",
                     "São Paulo", "Centro");
             Dependent lucas = addDependent(mariana, "Lucas Costa", "Colégio Objetivo");
+            // 2º dependente: usado para demonstrar o fluxo de contratação/assinatura.
+            Dependent sofia = addDependent(mariana, "Sofia Costa", "Colégio Objetivo");
             guardianRepository.save(mariana);
 
             GuardianProfile juliana = buildGuardian(
@@ -143,13 +163,21 @@ public class DataSeeder {
             seedWeek(anaEnrollment, true, false, true, false, true);
             enrollmentRepository.save(anaEnrollment);
 
-            // ----- Solicitação de contratação pendente -----
+            // ----- Solicitações de contratação pendentes -----
             HireRequest pending = new HireRequest();
             pending.setGuardian(juliana);
             pending.setTransporter(roberto);
             pending.setDependent(pedro);
             pending.setStatus(HireStatus.PENDING);
             hireRequestRepository.save(pending);
+
+            // Mariana → Roberto (Sofia): demonstra o fluxo completo com os 2 logins demo.
+            HireRequest marianaPending = new HireRequest();
+            marianaPending.setGuardian(mariana);
+            marianaPending.setTransporter(roberto);
+            marianaPending.setDependent(sofia);
+            marianaPending.setStatus(HireStatus.PENDING);
+            hireRequestRepository.save(marianaPending);
 
             // ----- Avisos -----
             noticeRepository.saveAll(List.of(
@@ -159,14 +187,27 @@ public class DataSeeder {
                             + "aplicativo. Evite juros e pague até o dia 10.", 3),
                     notice(roberto, "Não haverá transporte na próxima sexta-feira (feriado nacional).", 3)));
 
-            // ----- Rota do dia -----
+            // ----- Rota do dia (com coordenadas para o mapa) -----
             routeStopRepository.saveAll(List.of(
-                    routeStop(roberto, "Lucas Costa", "Rua das Flores, 123 - Centro",
-                            RouteStopStatus.GOING, 1),
-                    routeStop(roberto, "Pedro Silva", "Av. Brasil, 456 - Vila Mariana",
-                            RouteStopStatus.NOT_GOING, 2),
-                    routeStop(roberto, "Colégio Objetivo", "Rua do Parque, 789 - Centro",
-                            RouteStopStatus.SCHOOL, 3)));
+                    routeStop(roberto, lucas, "Lucas Costa", "Rua das Flores, 123 - Centro",
+                            RouteStopStatus.GOING, 1, -23.5489, -46.6388),
+                    routeStop(roberto, pedro, "Pedro Silva", "Av. Brasil, 456 - Vila Mariana",
+                            RouteStopStatus.NOT_GOING, 2, -23.5870, -46.6340),
+                    routeStop(roberto, null, "Colégio Objetivo", "Rua do Parque, 789 - Centro",
+                            RouteStopStatus.SCHOOL, 3, -23.5530, -46.6520)));
+
+            // ----- Financeiro de demonstração (Roberto) -----
+            expenseRepository.saveAll(List.of(
+                    expense(roberto, LocalDate.now().minusDays(2), "Manutenção", "Troca de óleo", "180.00"),
+                    expense(roberto, LocalDate.now().minusDays(5), "Pedágio", null, "45.00"),
+                    expense(roberto, LocalDate.now().minusDays(8), "Lavagem", "Lava-rápido", "60.00")));
+            fuelEntryRepository.saveAll(List.of(
+                    fuelEntry(roberto, LocalDate.now().minusDays(1), 42.0, "294.00"),
+                    fuelEntry(roberto, LocalDate.now().minusDays(7), 40.0, "276.00")));
+            dailyDistanceRepository.saveAll(List.of(
+                    dailyDistance(roberto, LocalDate.now(), 38.4),
+                    dailyDistance(roberto, LocalDate.now().minusDays(1), 64.2),
+                    dailyDistance(roberto, LocalDate.now().minusDays(2), 71.0)));
 
             // ----- Conversa -----
             Conversation conversation = new Conversation();
@@ -308,23 +349,134 @@ public class DataSeeder {
         enrollment.getPayments().add(payment);
     }
 
+    /** Preenche campos novos nos avisos antigos (publishAt, allowComments, priority). */
+    private void backfillNotices(NoticeRepository noticeRepository) {
+        for (Notice notice : noticeRepository.findAll()) {
+            boolean changed = false;
+            if (notice.getPublishAt() == null) {
+                notice.setPublishAt(notice.getCreatedAt() != null ? notice.getCreatedAt() : Instant.now());
+                changed = true;
+            }
+            if (notice.getAllowComments() == null) {
+                notice.setAllowComments(true);
+                changed = true;
+            }
+            if (notice.getPriority() == null) {
+                notice.setPriority(NoticePriority.INFO);
+                changed = true;
+            }
+            if (changed) {
+                noticeRepository.save(notice);
+            }
+        }
+    }
+
+    private Expense expense(TransporterProfile transporter, LocalDate date, String category,
+                            String description, String amount) {
+        Expense expense = new Expense();
+        expense.setTransporter(transporter);
+        expense.setDate(date);
+        expense.setCategory(category);
+        expense.setDescription(description);
+        expense.setAmount(new BigDecimal(amount));
+        return expense;
+    }
+
+    private FuelEntry fuelEntry(TransporterProfile transporter, LocalDate date, double liters, String amount) {
+        FuelEntry entry = new FuelEntry();
+        entry.setTransporter(transporter);
+        entry.setDate(date);
+        entry.setLiters(liters);
+        entry.setAmount(new BigDecimal(amount));
+        return entry;
+    }
+
+    private DailyDistance dailyDistance(TransporterProfile transporter, LocalDate date, double km) {
+        DailyDistance distance = new DailyDistance();
+        distance.setTransporter(transporter);
+        distance.setDate(date);
+        distance.setKm(km);
+        return distance;
+    }
+
     private Notice notice(TransporterProfile transporter, String message, int recipients) {
         Notice notice = new Notice();
         notice.setTransporter(transporter);
         notice.setMessage(message);
         notice.setRecipientsCount(recipients);
+        notice.setPublishAt(Instant.now()); // já publicado (visível aos pais)
+        notice.setAllowComments(true);
+        notice.setPriority(NoticePriority.INFO);
+        notice.setAudienceAll(true);
         return notice;
     }
 
-    private RouteStop routeStop(TransporterProfile transporter, String label, String address,
-                                RouteStopStatus status, int position) {
+    private RouteStop routeStop(TransporterProfile transporter, Dependent dependent, String label,
+                                String address, RouteStopStatus status, int position,
+                                double latitude, double longitude) {
         RouteStop stop = new RouteStop();
         stop.setTransporter(transporter);
+        stop.setDependent(dependent);
         stop.setLabel(label);
         stop.setAddress(address);
         stop.setStatus(status);
         stop.setPosition(position);
+        stop.setLatitude(latitude);
+        stop.setLongitude(longitude);
         return stop;
+    }
+
+    /**
+     * Preenche dados desta feature ausentes em bancos já existentes (criados antes
+     * dela), sem exigir reset: coordenadas das paradas, posição inicial do
+     * transportador e o vínculo parada→dependente. Idempotente: só toca campos nulos.
+     */
+    private void backfillGeo(TransporterProfileRepository transporterRepository,
+                             RouteStopRepository routeStopRepository,
+                             DependentRepository dependentRepository) {
+        Map<String, double[]> coordsByLabel = Map.of(
+                "Lucas Costa", new double[]{-23.5489, -46.6388},
+                "Pedro Silva", new double[]{-23.5870, -46.6340},
+                "Colégio Objetivo", new double[]{-23.5530, -46.6520});
+
+        // Index de dependentes por nome, para reconectar paradas antigas (label == nome).
+        Map<String, Dependent> dependentByName = new HashMap<>();
+        for (Dependent dependent : dependentRepository.findAll()) {
+            dependentByName.putIfAbsent(dependent.getName(), dependent);
+        }
+
+        for (RouteStop stop : routeStopRepository.findAll()) {
+            boolean changed = false;
+            if (stop.getLatitude() == null || stop.getLongitude() == null) {
+                double[] coords = coordsByLabel.get(stop.getLabel());
+                if (coords != null) {
+                    stop.setLatitude(coords[0]);
+                    stop.setLongitude(coords[1]);
+                    changed = true;
+                }
+            }
+            if (stop.getDependent() == null && stop.getStatus() != RouteStopStatus.SCHOOL) {
+                Dependent match = dependentByName.get(stop.getLabel());
+                if (match != null) {
+                    stop.setDependent(match);
+                    changed = true;
+                }
+            }
+            if (changed) {
+                routeStopRepository.save(stop);
+            }
+        }
+
+        for (TransporterProfile transporter : transporterRepository.findAll()) {
+            boolean hasStops = !routeStopRepository
+                    .findByTransporterIdOrderByPositionAsc(transporter.getId()).isEmpty();
+            if (transporter.getCurrentLatitude() == null && hasStops) {
+                transporter.setCurrentLatitude(ROBERTO_START_LAT);
+                transporter.setCurrentLongitude(ROBERTO_START_LON);
+                transporter.setLocationUpdatedAt(Instant.now());
+                transporterRepository.save(transporter);
+            }
+        }
     }
 
     private void addMessage(Conversation conversation, User sender, String text, long minutesAgo) {

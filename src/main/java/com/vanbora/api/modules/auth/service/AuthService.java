@@ -1,6 +1,7 @@
 package com.vanbora.api.modules.auth.service;
 
 import com.vanbora.api.modules.auth.dto.AuthResponse;
+import com.vanbora.api.modules.auth.dto.ChangePasswordRequest;
 import com.vanbora.api.modules.auth.dto.LoginRequest;
 import com.vanbora.api.modules.auth.dto.RegisterGuardianRequest;
 import com.vanbora.api.modules.auth.dto.RegisterTransporterRequest;
@@ -13,4 +14,6 @@ public interface AuthService {
     AuthResponse registerTransporter(RegisterTransporterRequest request);
 
     AuthResponse login(LoginRequest request);
+
+    void changePassword(Long userId, ChangePasswordRequest request);
 }

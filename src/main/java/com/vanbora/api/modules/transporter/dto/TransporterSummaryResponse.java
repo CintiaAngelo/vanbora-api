@@ -8,6 +8,7 @@ import java.util.List;
 public record TransporterSummaryResponse(
         Long id,
         String name,
+        String photoUrl,
         BigDecimal rating,
         int reviewsCount,
         List<String> schools,
@@ -19,6 +20,7 @@ public record TransporterSummaryResponse(
         return new TransporterSummaryResponse(
                 t.getId(),
                 t.getUser().getName(),
+                t.getPhotoUrl(),
                 t.getRatingAvg(),
                 t.getReviewsCount() == null ? 0 : t.getReviewsCount(),
                 List.copyOf(t.getSchools()),

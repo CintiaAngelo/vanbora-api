@@ -28,4 +28,15 @@ public class Helper extends BaseEntity {
 
     @Column(nullable = false)
     private String role;
+
+    @Column(name = "photo_url", length = 512)
+    private String photoUrl;
+
+    /** Ativo no perfil público. NULLABLE (ddl-auto em tabela populada): null ⇒ ativo. */
+    private Boolean active = true;
+
+    /** Considera nulo como ativo (registros antigos sem a coluna preenchida). */
+    public boolean isActive() {
+        return active == null || active;
+    }
 }
