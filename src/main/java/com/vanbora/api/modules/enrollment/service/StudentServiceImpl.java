@@ -1,8 +1,8 @@
 package com.vanbora.api.modules.enrollment.service;
 
-import com.vanbora.api.modules.enrollment.domain.Attendance;
 import com.vanbora.api.modules.enrollment.domain.Enrollment;
 import com.vanbora.api.modules.enrollment.dto.StudentResponse;
+import com.vanbora.api.modules.enrollment.repository.AbsenceRepository;
 import com.vanbora.api.modules.enrollment.repository.EnrollmentRepository;
 import com.vanbora.api.modules.transporter.domain.TransporterProfile;
 import com.vanbora.api.modules.transporter.repository.TransporterProfileRepository;
@@ -21,11 +21,14 @@ public class StudentServiceImpl implements StudentService {
 
     private final EnrollmentRepository enrollmentRepository;
     private final TransporterProfileRepository transporterRepository;
+    private final AbsenceRepository absenceRepository;
 
     public StudentServiceImpl(EnrollmentRepository enrollmentRepository,
-                              TransporterProfileRepository transporterRepository) {
+                              TransporterProfileRepository transporterRepository,
+                              AbsenceRepository absenceRepository) {
         this.enrollmentRepository = enrollmentRepository;
         this.transporterRepository = transporterRepository;
+        this.absenceRepository = absenceRepository;
     }
 
     @Override
@@ -33,21 +36,18 @@ public class StudentServiceImpl implements StudentService {
         TransporterProfile transporter = transporterRepository.findByUserId(transporterUserId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Perfil de transportador", transporterUserId));
 
-        DayOfWeek today = LocalDate.now().getDayOfWeek();
-        boolean weekend = today == DayOfWeek.SATURDAY || today == DayOfWeek.SUNDAY;
+        LocalDate today = LocalDate.now();
+        boolean weekend =
+                today.getDayOfWeek() == DayOfWeek.SATURDAY || today.getDayOfWeek() == DayOfWeek.SUNDAY;
 
         return enrollmentRepository.findByTransporterId(transporter.getId()).stream()
                 .filter(e -> financeStatus == null || e.getFinanceStatus() == financeStatus)
-                .map(e -> StudentResponse.from(e, weekend || isPresentOn(e, today)))
+                .map(e -> StudentResponse.from(e, weekend || isPresentToday(e, today)))
                 .toList();
     }
 
-    /** Presença do aluno no dia (default: presente quando não há registro). */
-    private boolean isPresentOn(Enrollment enrollment, DayOfWeek day) {
-        return enrollment.getAttendance().stream()
-                .filter(a -> a.getDayOfWeek() == day)
-                .findFirst()
-                .map(Attendance::isPresent)
-                .orElse(true);
+    /** Presente hoje = não há falta avisada para a data (default: presente). */
+    private boolean isPresentToday(Enrollment enrollment, LocalDate today) {
+        return !absenceRepository.existsByEnrollmentIdAndDate(enrollment.getId(), today);
     }
 }

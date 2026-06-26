@@ -1,5 +1,6 @@
 package com.vanbora.api.modules.guardian.domain;
 
+import com.vanbora.api.modules.school.domain.School;
 import com.vanbora.api.shared.domain.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -28,4 +29,17 @@ public class Dependent extends BaseEntity {
 
     @Column(nullable = false)
     private String school;
+
+    /** Escola do catálogo (coordenada precisa). Nullable: dados antigos só têm o nome. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "school_id")
+    private School schoolRef;
+
+    /** Excluído pelo responsável (soft-delete). NULLABLE p/ ddl-auto: null ⇒ ativo. */
+    @Column
+    private Boolean archived;
+
+    public boolean isArchived() {
+        return Boolean.TRUE.equals(archived);
+    }
 }

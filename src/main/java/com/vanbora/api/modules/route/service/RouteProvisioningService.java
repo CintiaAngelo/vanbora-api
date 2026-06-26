@@ -69,11 +69,20 @@ public class RouteProvisioningService {
             schoolStop.setAddress(school);
             schoolStop.setStatus(RouteStopStatus.SCHOOL);
             schoolStop.setPosition(nextPosition);
-            geocodingService.geocode(school + ", " + safe(guardian.getCity()) + ", Brasil")
-                    .ifPresent(coord -> {
-                        schoolStop.setLatitude(coord[0]);
-                        schoolStop.setLongitude(coord[1]);
-                    });
+
+            // Preferência: coordenada precisa do catálogo (escola escolhida no cadastro do dependente).
+            var catalog = dependent.getSchoolRef();
+            if (catalog != null && catalog.getLatitude() != null && catalog.getLongitude() != null) {
+                schoolStop.setLatitude(catalog.getLatitude());
+                schoolStop.setLongitude(catalog.getLongitude());
+            } else {
+                // Fallback (dados antigos sem escola do catálogo): geocodifica pelo nome.
+                geocodingService.geocode(school + ", " + safe(guardian.getCity()) + ", Brasil")
+                        .ifPresent(coord -> {
+                            schoolStop.setLatitude(coord[0]);
+                            schoolStop.setLongitude(coord[1]);
+                        });
+            }
             routeStopRepository.save(schoolStop);
         }
     }

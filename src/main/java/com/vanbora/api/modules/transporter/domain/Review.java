@@ -1,5 +1,6 @@
 package com.vanbora.api.modules.transporter.domain;
 
+import com.vanbora.api.modules.guardian.domain.GuardianProfile;
 import com.vanbora.api.shared.domain.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -22,6 +23,11 @@ public class Review extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "transporter_id", nullable = false)
     private TransporterProfile transporter;
+
+    /** Responsável autor (nullable: avaliações de demonstração não têm vínculo). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "guardian_id")
+    private GuardianProfile guardian;
 
     @Column(name = "author_name", nullable = false)
     private String authorName;

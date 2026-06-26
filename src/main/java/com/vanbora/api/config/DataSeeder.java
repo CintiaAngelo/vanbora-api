@@ -3,7 +3,6 @@ package com.vanbora.api.config;
 import com.vanbora.api.modules.chat.domain.Conversation;
 import com.vanbora.api.modules.chat.domain.Message;
 import com.vanbora.api.modules.chat.repository.ConversationRepository;
-import com.vanbora.api.modules.enrollment.domain.Attendance;
 import com.vanbora.api.modules.enrollment.domain.Enrollment;
 import com.vanbora.api.modules.enrollment.repository.EnrollmentRepository;
 import com.vanbora.api.modules.finance.domain.DailyDistance;
@@ -22,12 +21,15 @@ import com.vanbora.api.modules.notice.domain.Notice;
 import com.vanbora.api.modules.notice.repository.NoticeRepository;
 import com.vanbora.api.modules.payment.domain.Payment;
 import com.vanbora.api.modules.route.domain.RouteStop;
+import com.vanbora.api.modules.school.domain.School;
+import com.vanbora.api.modules.school.repository.SchoolRepository;
 import com.vanbora.api.modules.route.repository.RouteStopRepository;
 import com.vanbora.api.modules.transporter.domain.Helper;
 import com.vanbora.api.modules.transporter.domain.PriceZone;
 import com.vanbora.api.modules.transporter.domain.Review;
 import com.vanbora.api.modules.transporter.domain.TransporterProfile;
 import com.vanbora.api.modules.transporter.repository.TransporterProfileRepository;
+import com.vanbora.api.modules.transporter.service.ReviewService;
 import com.vanbora.api.modules.user.domain.User;
 import com.vanbora.api.modules.user.repository.UserRepository;
 import com.vanbora.api.shared.enums.FinanceStatus;
@@ -83,6 +85,8 @@ public class DataSeeder {
             ExpenseRepository expenseRepository,
             FuelEntryRepository fuelEntryRepository,
             DailyDistanceRepository dailyDistanceRepository,
+            ReviewService reviewService,
+            SchoolRepository schoolRepository,
             PasswordEncoder passwordEncoder) {
 
         return args -> {
@@ -94,16 +98,20 @@ public class DataSeeder {
                 // (coordenadas, vínculo parada→dependente e publishAt dos avisos).
                 backfillGeo(transporterRepository, routeStopRepository, dependentRepository);
                 backfillNotices(noticeRepository);
+                backfillSchools(schoolRepository);
+                // Recalcula média/contagem reais a partir das avaliações (corrige valores fixos antigos).
+                transporterRepository.findAll().forEach(reviewService::recompute);
                 return;
             }
+            backfillSchools(schoolRepository);
 
             String password = passwordEncoder.encode(DEFAULT_PASSWORD);
 
             // ----- Transportador principal: Roberto -----
             TransporterProfile roberto = buildTransporter(
                     userRepository, password, "Roberto Almeida", "roberto@vanbora.com",
-                    "ABC-1D34", "••• ••• 1234", 15, 5, new BigDecimal("4.90"), 124,
-                    new BigDecimal("350.00"), 3,
+                    "ABC-1D34", "••• ••• 1234", 5, new BigDecimal("4.90"), 124,
+                    new BigDecimal("350.00"),
                     Set.of("Colégio Objetivo", "Escola Adventista", "COC"),
                     Set.of("Centro", "Vila Nova", "Jd. América"));
             addHelper(roberto, "Carlos Mendes", "Monitor");
@@ -149,18 +157,15 @@ public class DataSeeder {
             // ----- Matrículas (alunos do Roberto) -----
             Enrollment lucasEnrollment = buildEnrollment(roberto, lucas,
                     new BigDecimal("350.00"), FinanceStatus.EM_DIA);
-            seedWeek(lucasEnrollment, true, true, false, false, true);
             seedPaymentHistory(lucasEnrollment);
             enrollmentRepository.save(lucasEnrollment);
 
             Enrollment pedroEnrollment = buildEnrollment(roberto, pedro,
                     new BigDecimal("350.00"), FinanceStatus.PENDENTE);
-            seedWeek(pedroEnrollment, true, true, true, true, true);
             enrollmentRepository.save(pedroEnrollment);
 
             Enrollment anaEnrollment = buildEnrollment(roberto, ana,
                     new BigDecimal("350.00"), FinanceStatus.ATRASADO);
-            seedWeek(anaEnrollment, true, false, true, false, true);
             enrollmentRepository.save(anaEnrollment);
 
             // ----- Solicitações de contratação pendentes -----
@@ -217,27 +222,60 @@ public class DataSeeder {
             addMessage(conversation, mariana.getUser(), "Bom dia, Roberto! O Lucas já está descendo.", 48);
             addMessage(conversation, roberto.getUser(), "Já estamos a caminho da escola!", 20);
             conversationRepository.save(conversation);
+
+            // Calcula a média/contagem reais a partir das avaliações semeadas.
+            transporterRepository.findAll().forEach(reviewService::recompute);
         };
+    }
+
+    /** Popula o catálogo de escolas (demonstração) com coordenadas reais de São Paulo. */
+    private void backfillSchools(SchoolRepository schoolRepository) {
+        if (schoolRepository.count() > 0) {
+            return;
+        }
+        schoolRepository.save(school("Colégio Objetivo", "01310-100", "Av. Paulista", "900",
+                "Bela Vista", "São Paulo", "SP", -23.5614, -46.6562));
+        schoolRepository.save(school("Escola Adventista", "02011-000", "Rua Voluntários da Pátria",
+                "2000", "Santana", "São Paulo", "SP", -23.5012, -46.6256));
+        schoolRepository.save(school("COC", "04101-300", "Rua Vergueiro", "3000",
+                "Vila Mariana", "São Paulo", "SP", -23.5870, -46.6340));
+        schoolRepository.save(school("Colégio Bandeirantes", "04026-002", "Rua Estela", "268",
+                "Vila Mariana", "São Paulo", "SP", -23.5896, -46.6378));
+        schoolRepository.save(school("Colégio Santa Cruz", "05058-001", "Rua Orobó", "277",
+                "Alto de Pinheiros", "São Paulo", "SP", -23.5350, -46.7060));
+    }
+
+    private School school(String name, String cep, String street, String number,
+                          String neighborhood, String city, String uf, double lat, double lon) {
+        School s = new School();
+        s.setName(name);
+        s.setCep(cep);
+        s.setStreet(street);
+        s.setNumber(number);
+        s.setNeighborhood(neighborhood);
+        s.setCity(city);
+        s.setUf(uf);
+        s.setLatitude(lat);
+        s.setLongitude(lon);
+        return s;
     }
 
     // ----- Helpers de construção -----
 
     private TransporterProfile buildTransporter(
             UserRepository userRepository, String password, String name, String email,
-            String plate, String cnh, int capacity, int years, BigDecimal rating, int reviews,
-            BigDecimal baseFee, int seats, Set<String> schools, Set<String> neighborhoods) {
+            String plate, String cnh, int years, BigDecimal rating, int reviews,
+            BigDecimal baseFee, Set<String> schools, Set<String> neighborhoods) {
         User user = userRepository.save(user(name, email, password, UserRole.TRANSPORTER));
         TransporterProfile t = new TransporterProfile();
         t.setUser(user);
         t.setPlate(plate);
         t.setCnh(cnh);
         t.setDocument("000.000.000-00");
-        t.setCapacity(capacity);
         t.setYearsExperience(years);
         t.setRatingAvg(rating);
         t.setReviewsCount(reviews);
         t.setBaseMonthlyFee(baseFee);
-        t.setAvailableSeats(seats);
         t.getSchools().addAll(schools);
         t.getNeighborhoods().addAll(neighborhoods);
         return t;
@@ -309,20 +347,6 @@ public class DataSeeder {
         enrollment.setFinanceStatus(status);
         enrollment.setActive(true);
         return enrollment;
-    }
-
-    private void seedWeek(Enrollment enrollment, boolean mon, boolean tue, boolean wed,
-                          boolean thu, boolean fri) {
-        boolean[] presence = {mon, tue, wed, thu, fri};
-        DayOfWeek[] days = {DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
-                DayOfWeek.THURSDAY, DayOfWeek.FRIDAY};
-        for (int i = 0; i < days.length; i++) {
-            Attendance attendance = new Attendance();
-            attendance.setEnrollment(enrollment);
-            attendance.setDayOfWeek(days[i]);
-            attendance.setPresent(presence[i]);
-            enrollment.getAttendance().add(attendance);
-        }
     }
 
     private void seedPaymentHistory(Enrollment enrollment) {

@@ -14,6 +14,8 @@ import com.vanbora.api.modules.payment.gateway.PaymentGateway.ChargeRequest;
 import com.vanbora.api.modules.payment.gateway.PaymentGateway.ChargeResult;
 import com.vanbora.api.modules.payment.repository.PaymentMethodRepository;
 import com.vanbora.api.modules.route.service.RouteProvisioningService;
+import com.vanbora.api.modules.transporter.domain.TransporterProfile;
+import com.vanbora.api.modules.transporter.service.ReviewService;
 import com.vanbora.api.shared.enums.ContractStatus;
 import com.vanbora.api.shared.enums.FinanceStatus;
 import com.vanbora.api.shared.enums.PaymentStatus;
@@ -35,19 +37,22 @@ public class ContractServiceImpl implements ContractService {
     private final GuardianProfileRepository guardianRepository;
     private final PaymentGateway paymentGateway;
     private final RouteProvisioningService routeProvisioningService;
+    private final ReviewService reviewService;
 
     public ContractServiceImpl(ContractRepository contractRepository,
                                PaymentMethodRepository paymentMethodRepository,
                                EnrollmentRepository enrollmentRepository,
                                GuardianProfileRepository guardianRepository,
                                PaymentGateway paymentGateway,
-                               RouteProvisioningService routeProvisioningService) {
+                               RouteProvisioningService routeProvisioningService,
+                               ReviewService reviewService) {
         this.contractRepository = contractRepository;
         this.paymentMethodRepository = paymentMethodRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.guardianRepository = guardianRepository;
         this.paymentGateway = paymentGateway;
         this.routeProvisioningService = routeProvisioningService;
+        this.reviewService = reviewService;
     }
 
     @Override
@@ -117,6 +122,37 @@ public class ContractServiceImpl implements ContractService {
         contract.setEnrollment(enrollment);
         contract.setStatus(ContractStatus.ACTIVE);
         contract.setSignedAt(Instant.now());
+        contractRepository.save(contract);
+
+        return ContractResponse.from(contract);
+    }
+
+    @Override
+    @Transactional
+    public ContractResponse cancel(Long userId, Long contractId, int rating, String comment) {
+        GuardianProfile guardian = resolveGuardian(userId);
+        Contract contract = contractRepository.findByIdAndGuardianId(contractId, guardian.getId())
+                .orElseThrow(() -> ResourceNotFoundException.of("Contrato", contractId));
+
+        if (contract.getStatus() != ContractStatus.ACTIVE) {
+            throw new BusinessException("Só é possível cancelar um contrato ativo.");
+        }
+
+        TransporterProfile transporter = contract.getTransporter();
+
+        // Avaliação obrigatória no cancelamento (registra + recalcula a média).
+        reviewService.addReview(guardian, transporter, rating, comment);
+
+        // Encerra APENAS o vínculo do dependente deste contrato (não afeta outros filhos).
+        Long dependentId = contract.getDependent().getId();
+        enrollmentRepository
+                .findFirstByDependentIdAndDependentGuardianIdAndActiveTrue(dependentId, guardian.getId())
+                .ifPresent(e -> {
+                    e.setActive(false);
+                    enrollmentRepository.save(e);
+                });
+
+        contract.setStatus(ContractStatus.CANCELLED);
         contractRepository.save(contract);
 
         return ContractResponse.from(contract);

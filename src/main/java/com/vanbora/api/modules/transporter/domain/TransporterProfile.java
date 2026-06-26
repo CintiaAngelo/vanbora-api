@@ -37,7 +37,6 @@ public class TransporterProfile extends BaseEntity {
     private String document;
     private String cnh;
     private String plate;
-    private Integer capacity;
 
     @Column(name = "photo_url", length = 512)
     private String photoUrl;
@@ -62,9 +61,6 @@ public class TransporterProfile extends BaseEntity {
     public boolean isAcceptsProposals() {
         return Boolean.TRUE.equals(acceptsProposals);
     }
-
-    @Column(name = "available_seats")
-    private Integer availableSeats = 0;
 
     /** Última posição conhecida do transportador (atualizada pelo GPS do app). */
     @Column(name = "current_latitude")

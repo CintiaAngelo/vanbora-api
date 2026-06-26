@@ -16,6 +16,7 @@ import com.vanbora.api.security.jwt.JwtService;
 import com.vanbora.api.shared.enums.UserRole;
 import com.vanbora.api.modules.guardian.service.GuardianAddressService;
 import com.vanbora.api.shared.exception.BusinessException;
+import com.vanbora.api.shared.validation.DocumentValidations;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
@@ -57,6 +58,10 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthResponse registerGuardian(RegisterGuardianRequest request) {
+        validateContact(request.phone(), request.email());
+        if (!DocumentValidations.isValidCpf(request.cpf())) {
+            throw new BusinessException("CPF inválido. Confira os números digitados.");
+        }
         ensureEmailAvailable(request.email());
 
         User user = createUser(request.name(), request.email(), request.password(),
@@ -76,6 +81,16 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthResponse registerTransporter(RegisterTransporterRequest request) {
+        validateContact(request.phone(), request.email());
+        if (!DocumentValidations.isValidCpf(request.document())) {
+            throw new BusinessException("CPF inválido. Confira os números digitados.");
+        }
+        if (!DocumentValidations.isValidCnh(request.cnh())) {
+            throw new BusinessException("CNH inválida. Informe os 11 dígitos do número de registro.");
+        }
+        if (!DocumentValidations.isValidPlate(request.plate())) {
+            throw new BusinessException("Placa inválida. Use até 7 caracteres (letras e números).");
+        }
         ensureEmailAvailable(request.email());
 
         User user = createUser(request.name(), request.email(), request.password(),
@@ -86,8 +101,6 @@ public class AuthServiceImpl implements AuthService {
         profile.setDocument(request.document());
         profile.setCnh(request.cnh());
         profile.setPlate(request.plate());
-        profile.setCapacity(request.capacity());
-        profile.setAvailableSeats(request.capacity() == null ? 0 : request.capacity());
         profile.setBaseMonthlyFee(
                 request.baseMonthlyFee() != null ? request.baseMonthlyFee() : BigDecimal.ZERO);
         addCleaned(profile.getSchools(), request.schools());
@@ -133,6 +146,16 @@ public class AuthServiceImpl implements AuthService {
             if (value != null && !value.isBlank()) {
                 target.add(value.trim());
             }
+        }
+    }
+
+    /** Valida telefone (11 dígitos) e e-mail; lança BusinessException se inválido. */
+    private void validateContact(String phone, String email) {
+        if (!DocumentValidations.isValidPhone(phone)) {
+            throw new BusinessException("Telefone inválido. Informe DDD + número (11 dígitos).");
+        }
+        if (!DocumentValidations.isValidEmail(email)) {
+            throw new BusinessException("E-mail inválido. Ex.: nome@exemplo.com.");
         }
     }
 

@@ -15,7 +15,6 @@ public record RegisterTransporterRequest(
         String document,
         String cnh,
         String plate,
-        Integer capacity,
         List<String> schools,
         List<String> neighborhoods,
         BigDecimal baseMonthlyFee

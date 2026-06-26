@@ -13,8 +13,7 @@ public record TransporterSummaryResponse(
         int reviewsCount,
         List<String> schools,
         List<String> neighborhoods,
-        BigDecimal monthlyFee,
-        int availableSeats
+        BigDecimal monthlyFee
 ) {
     public static TransporterSummaryResponse from(TransporterProfile t) {
         return new TransporterSummaryResponse(
@@ -25,7 +24,6 @@ public record TransporterSummaryResponse(
                 t.getReviewsCount() == null ? 0 : t.getReviewsCount(),
                 List.copyOf(t.getSchools()),
                 List.copyOf(t.getNeighborhoods()),
-                t.getBaseMonthlyFee(),
-                t.getAvailableSeats() == null ? 0 : t.getAvailableSeats());
+                t.getBaseMonthlyFee());
     }
 }

@@ -17,4 +17,10 @@ public interface ContractService {
      * contrato como ACTIVE.
      */
     ContractResponse sign(Long userId, Long contractId, Long paymentMethodId);
+
+    /**
+     * Cancela um contrato ativo: registra a avaliação obrigatória do transportador,
+     * encerra a matrícula e marca o contrato como CANCELLED.
+     */
+    ContractResponse cancel(Long userId, Long contractId, int rating, String comment);
 }

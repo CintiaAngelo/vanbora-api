@@ -13,5 +13,16 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 
     Optional<Enrollment> findFirstByDependentGuardianIdAndActiveTrue(Long guardianId);
 
+    /** Matrícula ativa de um dependente específico do responsável (visão por dependente). */
+    Optional<Enrollment> findFirstByDependentIdAndDependentGuardianIdAndActiveTrue(
+            Long dependentId, Long guardianId);
+
+    /** Existe (ou existiu) vínculo deste responsável com este transportador? (elegibilidade de avaliação) */
+    boolean existsByDependentGuardianIdAndTransporterId(Long guardianId, Long transporterId);
+
+    /** Matrículas ativas deste responsável com este transportador (para o cancelamento total). */
+    List<Enrollment> findByDependentGuardianIdAndTransporterIdAndActiveTrue(
+            Long guardianId, Long transporterId);
+
     long countByTransporterId(Long transporterId);
 }

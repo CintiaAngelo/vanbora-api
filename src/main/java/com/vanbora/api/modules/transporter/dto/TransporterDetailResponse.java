@@ -17,7 +17,6 @@ public record TransporterDetailResponse(
         List<String> neighborhoods,
         BigDecimal monthlyFee,
         boolean acceptsProposals,
-        int availableSeats,
         List<HelperResponse> helpers,
         List<ReviewResponse> reviews
 ) {
@@ -35,7 +34,6 @@ public record TransporterDetailResponse(
                 List.copyOf(t.getNeighborhoods()),
                 t.getBaseMonthlyFee(),
                 t.isAcceptsProposals(),
-                t.getAvailableSeats() == null ? 0 : t.getAvailableSeats(),
                 helpers,
                 reviews);
     }

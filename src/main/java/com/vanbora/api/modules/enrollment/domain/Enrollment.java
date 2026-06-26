@@ -51,7 +51,7 @@ public class Enrollment extends BaseEntity {
     private boolean active = true;
 
     @OneToMany(mappedBy = "enrollment", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Attendance> attendance = new ArrayList<>();
+    private List<Absence> absences = new ArrayList<>();
 
     @OneToMany(mappedBy = "enrollment", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<com.vanbora.api.modules.payment.domain.Payment> payments = new ArrayList<>();

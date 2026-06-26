@@ -9,7 +9,9 @@ import java.time.Instant;
 public record ContractResponse(
         Long id,
         ContractStatus status,
+        Long transporterId,
         String transporterName,
+        Long dependentId,
         String studentName,
         String school,
         BigDecimal monthlyFee,
@@ -19,7 +21,9 @@ public record ContractResponse(
         return new ContractResponse(
                 contract.getId(),
                 contract.getStatus(),
+                contract.getTransporter().getId(),
                 contract.getTransporter().getUser().getName(),
+                contract.getDependent().getId(),
                 contract.getDependent().getName(),
                 contract.getDependent().getSchool(),
                 contract.getMonthlyFee(),

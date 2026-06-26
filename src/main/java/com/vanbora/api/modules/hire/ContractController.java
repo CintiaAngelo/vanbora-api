@@ -1,5 +1,6 @@
 package com.vanbora.api.modules.hire;
 
+import com.vanbora.api.modules.hire.dto.CancelContractRequest;
 import com.vanbora.api.modules.hire.dto.ContractResponse;
 import com.vanbora.api.modules.hire.dto.SignContractRequest;
 import com.vanbora.api.modules.hire.service.ContractService;
@@ -44,5 +45,12 @@ public class ContractController {
     @PostMapping("/{id}/sign")
     public ContractResponse sign(@PathVariable Long id, @Valid @RequestBody SignContractRequest request) {
         return contractService.sign(currentUserProvider.requireUserId(), id, request.paymentMethodId());
+    }
+
+    /** Cancela o contrato — exige avaliação obrigatória do transportador. */
+    @PostMapping("/{id}/cancel")
+    public ContractResponse cancel(@PathVariable Long id, @Valid @RequestBody CancelContractRequest request) {
+        return contractService.cancel(
+                currentUserProvider.requireUserId(), id, request.rating(), request.comment());
     }
 }

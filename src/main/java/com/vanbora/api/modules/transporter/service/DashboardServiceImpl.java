@@ -1,7 +1,7 @@
 package com.vanbora.api.modules.transporter.service;
 
-import com.vanbora.api.modules.enrollment.domain.Attendance;
 import com.vanbora.api.modules.enrollment.domain.Enrollment;
+import com.vanbora.api.modules.enrollment.repository.AbsenceRepository;
 import com.vanbora.api.modules.enrollment.repository.EnrollmentRepository;
 import com.vanbora.api.modules.hire.dto.HireRequestResponse;
 import com.vanbora.api.modules.hire.repository.HireRequestRepository;
@@ -27,16 +27,19 @@ public class DashboardServiceImpl implements DashboardService {
     private final EnrollmentRepository enrollmentRepository;
     private final HireRequestRepository hireRequestRepository;
     private final NoticeRepository noticeRepository;
+    private final AbsenceRepository absenceRepository;
 
     public DashboardServiceImpl(
             TransporterProfileRepository transporterRepository,
             EnrollmentRepository enrollmentRepository,
             HireRequestRepository hireRequestRepository,
-            NoticeRepository noticeRepository) {
+            NoticeRepository noticeRepository,
+            AbsenceRepository absenceRepository) {
         this.transporterRepository = transporterRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.hireRequestRepository = hireRequestRepository;
         this.noticeRepository = noticeRepository;
+        this.absenceRepository = absenceRepository;
     }
 
     @Override
@@ -65,23 +68,21 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     private int countConfirmedToday(List<Enrollment> enrollments) {
-        DayOfWeek today = LocalDate.now().getDayOfWeek();
-        boolean weekend = today == DayOfWeek.SATURDAY || today == DayOfWeek.SUNDAY;
+        LocalDate today = LocalDate.now();
+        boolean weekend =
+                today.getDayOfWeek() == DayOfWeek.SATURDAY || today.getDayOfWeek() == DayOfWeek.SUNDAY;
 
         int confirmed = 0;
         for (Enrollment enrollment : enrollments) {
-            if (weekend || isPresentOn(enrollment, today)) {
+            if (weekend || isPresentToday(enrollment, today)) {
                 confirmed++;
             }
         }
         return confirmed;
     }
 
-    private boolean isPresentOn(Enrollment enrollment, DayOfWeek day) {
-        return enrollment.getAttendance().stream()
-                .filter(a -> a.getDayOfWeek() == day)
-                .findFirst()
-                .map(Attendance::isPresent)
-                .orElse(true);
+    /** Presente hoje = não há falta avisada para a data (default: presente). */
+    private boolean isPresentToday(Enrollment enrollment, LocalDate today) {
+        return !absenceRepository.existsByEnrollmentIdAndDate(enrollment.getId(), today);
     }
 }

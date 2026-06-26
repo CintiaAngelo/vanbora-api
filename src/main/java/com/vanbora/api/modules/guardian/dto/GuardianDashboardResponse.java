@@ -1,18 +1,42 @@
 package com.vanbora.api.modules.guardian.dto;
 
-import com.vanbora.api.modules.payment.dto.PaymentResponse;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 /** Dados do painel inicial do responsável. */
 public record GuardianDashboardResponse(
         boolean hasTransporter,
+        /** Dependente exibido neste painel. */
+        Long dependentId,
         String studentName,
+        /** Contrato pendente de assinatura deste dependente (em fase de contratação). */
+        Long pendingContractId,
+        /** Transportador contratado (para abrir a tela de avaliação). */
+        Long transporterId,
+        String transporterName,
+        /** Pesquisa de satisfação vencida (nunca avaliou ou última > 3 meses). */
+        boolean reviewDue,
+        /** Vai hoje? (presença do dia atual). null = fim de semana / sem aula. */
+        Boolean goingToday,
         List<DayAttendance> weekAttendance,
-        PaymentResponse nextPayment,
+        NextPayment nextPayment,
         TransporterNotice notice
 ) {
-    /** Presença em um dia (rótulo SEG..SEX). */
-    public record DayAttendance(String day, Boolean present) {
+    /** Presença em um dia da semana (rótulo SEG..SEX + data ISO + se vai). */
+    public record DayAttendance(String day, String date, boolean present) {
+    }
+
+    /**
+     * Próxima mensalidade. Pode ser uma cobrança real em aberto (payable=true)
+     * ou uma projeção do próximo mês quando está tudo em dia (payable=false).
+     */
+    public record NextPayment(
+            String referenceMonth,
+            BigDecimal amount,
+            LocalDate dueDate,
+            String status,
+            boolean payable) {
     }
 
     /** Aviso recente do transportador contratado. */

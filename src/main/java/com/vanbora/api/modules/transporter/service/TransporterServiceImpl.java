@@ -17,6 +17,7 @@ import com.vanbora.api.modules.transporter.repository.ReviewRepository;
 import com.vanbora.api.modules.transporter.repository.TransporterProfileRepository;
 import com.vanbora.api.shared.exception.BusinessException;
 import com.vanbora.api.shared.exception.ResourceNotFoundException;
+import com.vanbora.api.shared.validation.DocumentValidations;
 import com.vanbora.api.shared.storage.StorageService;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -85,14 +86,17 @@ public class TransporterServiceImpl implements TransporterService {
     @Transactional
     public TransporterProfileResponse updateVehicle(Long userId, UpdateVehicleRequest request) {
         TransporterProfile transporter = findByUserOrThrow(userId);
-        if (request.cnh() != null) {
+        if (request.cnh() != null && !request.cnh().isBlank()) {
+            if (!DocumentValidations.isValidCnh(request.cnh())) {
+                throw new BusinessException("CNH inválida. Informe os 11 dígitos do número de registro.");
+            }
             transporter.setCnh(request.cnh().trim());
         }
-        if (request.plate() != null) {
+        if (request.plate() != null && !request.plate().isBlank()) {
+            if (!DocumentValidations.isValidPlate(request.plate())) {
+                throw new BusinessException("Placa inválida. Use até 7 caracteres (letras e números).");
+            }
             transporter.setPlate(request.plate().trim());
-        }
-        if (request.capacity() != null) {
-            transporter.setCapacity(request.capacity());
         }
         return profileResponse(transporterRepository.save(transporter));
     }
