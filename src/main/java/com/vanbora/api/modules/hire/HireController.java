@@ -48,4 +48,20 @@ public class HireController {
         hireService.reject(currentUserProvider.requireUserId(), id);
         return ResponseEntity.noContent().build();
     }
+
+    /** [Responsável] Cancela a própria solicitação pendente. */
+    @PostMapping("/{id}/cancel")
+    @PreAuthorize("hasRole('GUARDIAN')")
+    public ResponseEntity<Void> cancel(@PathVariable Long id) {
+        hireService.cancelHireRequest(currentUserProvider.requireUserId(), id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** [Responsável] Dispensa o aviso de uma solicitação recusada. */
+    @PostMapping("/{id}/dismiss")
+    @PreAuthorize("hasRole('GUARDIAN')")
+    public ResponseEntity<Void> dismiss(@PathVariable Long id) {
+        hireService.dismissHireRequest(currentUserProvider.requireUserId(), id);
+        return ResponseEntity.noContent().build();
+    }
 }

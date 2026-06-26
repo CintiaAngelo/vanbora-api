@@ -4,5 +4,9 @@ package com.vanbora.api.shared.enums;
 public enum HireStatus {
     PENDING,
     ACCEPTED,
-    REJECTED
+    REJECTED,
+    /** Cancelada pelo responsável antes de o transportador responder. */
+    CANCELLED,
+    /** Expirada automaticamente (transportador não respondeu no prazo). */
+    EXPIRED
 }

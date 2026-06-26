@@ -11,6 +11,9 @@ public interface NoticeCommentRepository extends JpaRepository<NoticeComment, Lo
 
     long countByNoticeId(Long noticeId);
 
+    /** Se o usuário (responsável) já comentou neste aviso — conta como "lido". */
+    boolean existsByNoticeIdAndAuthorId(Long noticeId, Long authorId);
+
     @Transactional
     void deleteByNoticeId(Long noticeId);
 }

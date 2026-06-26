@@ -15,7 +15,8 @@ public record ContractResponse(
         String studentName,
         String school,
         BigDecimal monthlyFee,
-        Instant signedAt
+        Instant signedAt,
+        String contractText
 ) {
     public static ContractResponse from(Contract contract) {
         return new ContractResponse(
@@ -27,6 +28,7 @@ public record ContractResponse(
                 contract.getDependent().getName(),
                 contract.getDependent().getSchool(),
                 contract.getMonthlyFee(),
-                contract.getSignedAt());
+                contract.getSignedAt(),
+                contract.getContractText());
     }
 }

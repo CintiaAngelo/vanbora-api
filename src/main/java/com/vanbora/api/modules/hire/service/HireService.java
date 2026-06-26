@@ -14,4 +14,13 @@ public interface HireService {
     void accept(Long transporterUserId, Long hireRequestId);
 
     void reject(Long transporterUserId, Long hireRequestId);
+
+    /** [Responsável] Cancela a própria solicitação pendente (some da tela do transportador). */
+    void cancelHireRequest(Long guardianUserId, Long hireRequestId);
+
+    /** [Responsável] Dispensa o aviso de uma solicitação recusada na home. */
+    void dismissHireRequest(Long guardianUserId, Long hireRequestId);
+
+    /** Expira as solicitações pendentes cujo prazo de resposta já passou. */
+    int expireOverdue();
 }

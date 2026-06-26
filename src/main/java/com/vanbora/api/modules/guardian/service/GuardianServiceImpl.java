@@ -20,7 +20,9 @@ import com.vanbora.api.modules.guardian.dto.UpdateAddressRequest;
 import com.vanbora.api.modules.guardian.repository.DependentRepository;
 import com.vanbora.api.modules.guardian.repository.GuardianProfileRepository;
 import com.vanbora.api.modules.hire.domain.Contract;
+import com.vanbora.api.modules.hire.domain.HireRequest;
 import com.vanbora.api.modules.hire.repository.ContractRepository;
+import com.vanbora.api.modules.hire.repository.HireRequestRepository;
 import com.vanbora.api.modules.notice.repository.NoticeRepository;
 import com.vanbora.api.modules.payment.domain.Payment;
 import com.vanbora.api.modules.payment.dto.PaymentResponse;
@@ -33,6 +35,7 @@ import com.vanbora.api.modules.route.repository.RouteStopRepository;
 import com.vanbora.api.modules.transporter.domain.TransporterProfile;
 import com.vanbora.api.modules.transporter.repository.ReviewRepository;
 import com.vanbora.api.shared.enums.ContractStatus;
+import com.vanbora.api.shared.enums.HireStatus;
 import com.vanbora.api.shared.enums.PaymentStatus;
 import com.vanbora.api.shared.enums.RouteStopStatus;
 import com.vanbora.api.shared.exception.BusinessException;
@@ -75,6 +78,7 @@ public class GuardianServiceImpl implements GuardianService {
     private final RouteStopRepository routeStopRepository;
     private final ReviewRepository reviewRepository;
     private final ContractRepository contractRepository;
+    private final HireRequestRepository hireRequestRepository;
     private final SchoolRepository schoolRepository;
     private final GuardianAddressService guardianAddressService;
 
@@ -88,6 +92,7 @@ public class GuardianServiceImpl implements GuardianService {
             RouteStopRepository routeStopRepository,
             ReviewRepository reviewRepository,
             ContractRepository contractRepository,
+            HireRequestRepository hireRequestRepository,
             SchoolRepository schoolRepository,
             GuardianAddressService guardianAddressService) {
         this.guardianRepository = guardianRepository;
@@ -99,6 +104,7 @@ public class GuardianServiceImpl implements GuardianService {
         this.routeStopRepository = routeStopRepository;
         this.reviewRepository = reviewRepository;
         this.contractRepository = contractRepository;
+        this.hireRequestRepository = hireRequestRepository;
         this.schoolRepository = schoolRepository;
         this.guardianAddressService = guardianAddressService;
     }
@@ -183,7 +189,8 @@ public class GuardianServiceImpl implements GuardianService {
         if (dependent == null) {
             // Responsável sem dependentes cadastrados.
             return new GuardianDashboardResponse(
-                    false, null, null, null, null, null, false, null, List.of(), null, null);
+                    false, null, null, null, null, null, false, null, List.of(), null, null,
+                    null, null, null, null, null);
         }
 
         Long depId = dependent.getId();
@@ -194,12 +201,16 @@ public class GuardianServiceImpl implements GuardianService {
                 .map(Contract::getId)
                 .orElse(null);
 
+        HireState hire = resolveHireState(guardian.getId(), depId);
+
         Optional<Enrollment> enrollmentOpt = activeEnrollment(guardian, dependent);
         if (enrollmentOpt.isEmpty()) {
-            // Dependente sem transportador (ou em fase de contratação).
+            // Dependente sem transportador (solicitação pendente / recusada / em contratação).
             return new GuardianDashboardResponse(
                     false, depId, dependent.getName(), pendingContractId,
-                    null, null, false, null, List.of(), null, null);
+                    null, null, false, null, List.of(), null, null,
+                    hire.pendingId(), hire.pendingName(), hire.pendingExpiry(),
+                    hire.rejectedId(), hire.rejectedName());
         }
 
         Enrollment enrollment = enrollmentOpt.get();
@@ -222,7 +233,34 @@ public class GuardianServiceImpl implements GuardianService {
                 goingToday,
                 week,
                 nextPayment,
-                notice);
+                notice,
+                null, null, null, null, null);
+    }
+
+    /** Campos de acompanhamento da solicitação (pendente/recusada) para o dependente. */
+    private record HireState(
+            Long pendingId, String pendingName, java.time.Instant pendingExpiry,
+            Long rejectedId, String rejectedName) {
+        static final HireState NONE = new HireState(null, null, null, null, null);
+    }
+
+    /** Deriva o estado de acompanhamento a partir da solicitação mais recente do dependente. */
+    private HireState resolveHireState(Long guardianId, Long dependentId) {
+        HireRequest latest = hireRequestRepository
+                .findFirstByGuardianIdAndDependentIdOrderByIdDesc(guardianId, dependentId)
+                .orElse(null);
+        if (latest == null) {
+            return HireState.NONE;
+        }
+        if (latest.getStatus() == HireStatus.PENDING && !latest.isOverdue()) {
+            return new HireState(latest.getId(), latest.getTransporter().getUser().getName(),
+                    latest.effectiveExpiry(), null, null);
+        }
+        if (latest.getStatus() == HireStatus.REJECTED && latest.getGuardianDismissedAt() == null) {
+            return new HireState(null, null, null,
+                    latest.getId(), latest.getTransporter().getUser().getName());
+        }
+        return HireState.NONE;
     }
 
     /** Resolve o dependente selecionado (valida posse). dependentId null → primeiro do responsável. */

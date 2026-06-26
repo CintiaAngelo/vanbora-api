@@ -10,7 +10,9 @@ import com.vanbora.api.shared.enums.FinanceStatus;
 import com.vanbora.api.shared.exception.ResourceNotFoundException;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,7 +42,13 @@ public class StudentServiceImpl implements StudentService {
         boolean weekend =
                 today.getDayOfWeek() == DayOfWeek.SATURDAY || today.getDayOfWeek() == DayOfWeek.SUNDAY;
 
-        return enrollmentRepository.findByTransporterId(transporter.getId()).stream()
+        // Uma matrícula ATIVA por aluno (exclui canceladas e duplicatas de recontratação).
+        Map<Long, Enrollment> byDependent = new LinkedHashMap<>();
+        for (Enrollment e : enrollmentRepository.findByTransporterIdAndActiveTrue(transporter.getId())) {
+            byDependent.putIfAbsent(e.getDependent().getId(), e);
+        }
+
+        return byDependent.values().stream()
                 .filter(e -> financeStatus == null || e.getFinanceStatus() == financeStatus)
                 .map(e -> StudentResponse.from(e, weekend || isPresentToday(e, today)))
                 .toList();

@@ -38,6 +38,7 @@ public class ContractServiceImpl implements ContractService {
     private final PaymentGateway paymentGateway;
     private final RouteProvisioningService routeProvisioningService;
     private final ReviewService reviewService;
+    private final ContractTextBuilder contractTextBuilder;
 
     public ContractServiceImpl(ContractRepository contractRepository,
                                PaymentMethodRepository paymentMethodRepository,
@@ -45,7 +46,8 @@ public class ContractServiceImpl implements ContractService {
                                GuardianProfileRepository guardianRepository,
                                PaymentGateway paymentGateway,
                                RouteProvisioningService routeProvisioningService,
-                               ReviewService reviewService) {
+                               ReviewService reviewService,
+                               ContractTextBuilder contractTextBuilder) {
         this.contractRepository = contractRepository;
         this.paymentMethodRepository = paymentMethodRepository;
         this.enrollmentRepository = enrollmentRepository;
@@ -53,6 +55,7 @@ public class ContractServiceImpl implements ContractService {
         this.paymentGateway = paymentGateway;
         this.routeProvisioningService = routeProvisioningService;
         this.reviewService = reviewService;
+        this.contractTextBuilder = contractTextBuilder;
     }
 
     @Override
@@ -66,9 +69,15 @@ public class ContractServiceImpl implements ContractService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public ContractResponse get(Long userId, Long contractId) {
-        return ContractResponse.from(requireOwnContract(userId, contractId));
+        Contract contract = requireOwnContract(userId, contractId);
+        // Backfill: contratos liberados antes deste recurso (ou do seed) não têm o texto.
+        if (contract.getContractText() == null || contract.getContractText().isBlank()) {
+            contract.setContractText(contractTextBuilder.build(contract));
+            contractRepository.save(contract);
+        }
+        return ContractResponse.from(contract);
     }
 
     @Override
@@ -151,6 +160,9 @@ public class ContractServiceImpl implements ContractService {
                     e.setActive(false);
                     enrollmentRepository.save(e);
                 });
+
+        // Tira o aluno da rota/mapa do transportador (não conta mais como aluno dele).
+        routeProvisioningService.deprovisionForDependent(transporter.getId(), dependentId);
 
         contract.setStatus(ContractStatus.CANCELLED);
         contractRepository.save(contract);

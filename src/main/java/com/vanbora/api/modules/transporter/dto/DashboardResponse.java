@@ -9,6 +9,8 @@ public record DashboardResponse(
         int totalStudents,
         int confirmed,
         int absent,
+        /** Contratos cancelados (assinaturas encerradas) — indicador de churn. */
+        int cancelledContracts,
         List<HireRequestResponse> hireRequests,
         NoticeResponse recentNotice
 ) {

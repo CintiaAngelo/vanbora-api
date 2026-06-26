@@ -12,6 +12,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -82,6 +84,15 @@ public class TransporterProfile extends BaseEntity {
     /** Km acumulado registrado na última manutenção (para calcular o quanto falta). */
     @Column(name = "last_maintenance_km")
     private Double lastMaintenanceKm;
+
+    /**
+     * Modelo de contrato (apenas texto) definido pelo transportador. Quando preenchido,
+     * substitui o corpo padrão na assinatura; o cabeçalho com as partes é sempre gerado.
+     * NULLABLE (ddl-auto em tabela populada). LONGVARCHAR ⇒ coluna TEXT no MySQL.
+     */
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
+    @Column(name = "contract_template")
+    private String contractTemplate;
 
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "transporter_schools", joinColumns = @JoinColumn(name = "transporter_id"))

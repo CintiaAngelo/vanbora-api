@@ -1,8 +1,10 @@
 package com.vanbora.api.modules.transporter;
 
+import com.vanbora.api.modules.transporter.dto.ServiceAreaOptionsResponse;
 import com.vanbora.api.modules.transporter.dto.TransporterDetailResponse;
 import com.vanbora.api.modules.transporter.dto.TransporterProfileResponse;
 import com.vanbora.api.modules.transporter.dto.TransporterSummaryResponse;
+import com.vanbora.api.modules.transporter.dto.UpdateContractTemplateRequest;
 import com.vanbora.api.modules.transporter.dto.UpdatePricingRequest;
 import com.vanbora.api.modules.transporter.dto.UpdateServiceAreaRequest;
 import com.vanbora.api.modules.transporter.dto.UpdateVehicleRequest;
@@ -44,6 +46,12 @@ public class TransporterController {
         return transporterService.search(school, neighborhood, sort);
     }
 
+    /** Escolas e bairros já cadastrados, em ordem alfabética, para os filtros da busca. */
+    @GetMapping("/filters")
+    public ServiceAreaOptionsResponse filters() {
+        return transporterService.getServiceAreaOptions();
+    }
+
     @GetMapping("/me")
     @PreAuthorize("hasRole('TRANSPORTER')")
     public TransporterProfileResponse myProfile() {
@@ -69,6 +77,15 @@ public class TransporterController {
     @PreAuthorize("hasRole('TRANSPORTER')")
     public TransporterProfileResponse updatePricing(@Valid @RequestBody UpdatePricingRequest request) {
         return transporterService.updatePricing(currentUserProvider.requireUserId(), request);
+    }
+
+    /** Define/limpa o modelo de contrato (texto) exibido ao responsável na assinatura. */
+    @PutMapping("/me/contract-template")
+    @PreAuthorize("hasRole('TRANSPORTER')")
+    public TransporterProfileResponse updateContractTemplate(
+            @RequestBody UpdateContractTemplateRequest request) {
+        return transporterService.updateContractTemplate(
+                currentUserProvider.requireUserId(), request.template());
     }
 
     /** Define/atualiza a foto do transportador. */

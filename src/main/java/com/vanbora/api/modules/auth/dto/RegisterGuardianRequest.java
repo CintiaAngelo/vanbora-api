@@ -17,6 +17,8 @@ public record RegisterGuardianRequest(
         /** Se a entrega é no mesmo endereço do embarque. */
         boolean deliverySameAsPickup,
         /** Endereço de entrega (quando diferente do embarque). */
-        AddressInput delivery
+        AddressInput delivery,
+        /** Aceite da Política de Privacidade + Termos de Uso (LGPD). Obrigatório. */
+        boolean acceptedTerms
 ) {
 }

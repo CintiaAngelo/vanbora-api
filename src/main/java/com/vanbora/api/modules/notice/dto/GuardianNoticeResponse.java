@@ -18,10 +18,12 @@ public record GuardianNoticeResponse(
         boolean allowComments,
         String myReaction,
         long commentsCount,
-        List<ReactionGroup> reactions
+        List<ReactionGroup> reactions,
+        /** "Lido": o responsável já abriu, reagiu ou comentou — não aparece mais na home. */
+        boolean acknowledged
 ) {
     public static GuardianNoticeResponse from(Notice notice, List<NoticeReaction> reactions,
-                                              Long userId, long commentsCount) {
+                                              Long userId, long commentsCount, boolean acknowledged) {
         String mine = reactions.stream()
                 .filter(r -> r.getUser().getId().equals(userId))
                 .map(NoticeReaction::getEmoji)
@@ -38,6 +40,7 @@ public record GuardianNoticeResponse(
                 notice.isAllowComments(),
                 mine,
                 commentsCount,
-                ReactionGroup.from(reactions));
+                ReactionGroup.from(reactions),
+                acknowledged);
     }
 }

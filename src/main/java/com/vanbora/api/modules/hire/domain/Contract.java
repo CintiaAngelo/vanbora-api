@@ -17,6 +17,8 @@ import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -51,6 +53,14 @@ public class Contract extends BaseEntity {
 
     @Column(name = "monthly_fee", precision = 10, scale = 2, nullable = false)
     private BigDecimal monthlyFee;
+
+    /**
+     * Texto do contrato congelado na liberação — exatamente o que o responsável lê e
+     * assina. Imutável após criado. NULLABLE (ddl-auto). LONGVARCHAR ⇒ TEXT no MySQL.
+     */
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
+    @Column(name = "contract_text")
+    private String contractText;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

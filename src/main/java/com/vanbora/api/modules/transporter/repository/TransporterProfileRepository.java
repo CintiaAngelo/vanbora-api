@@ -24,4 +24,12 @@ public interface TransporterProfileRepository extends JpaRepository<TransporterP
             """)
     List<TransporterProfile> search(@Param("school") String school,
                                     @Param("neighborhood") String neighborhood);
+
+    /** Escolas distintas atendidas por algum transportador (para os filtros de busca). */
+    @Query("select distinct s from TransporterProfile t join t.schools s")
+    List<String> findDistinctSchools();
+
+    /** Bairros distintos atendidos por algum transportador (para os filtros de busca). */
+    @Query("select distinct n from TransporterProfile t join t.neighborhoods n")
+    List<String> findDistinctNeighborhoods();
 }

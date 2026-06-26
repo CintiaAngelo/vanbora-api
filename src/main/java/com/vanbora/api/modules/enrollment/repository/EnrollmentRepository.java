@@ -9,6 +9,9 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 
     List<Enrollment> findByTransporterId(Long transporterId);
 
+    /** Apenas matrículas ATIVAS do transportador (exclui canceladas/recontratadas). */
+    List<Enrollment> findByTransporterIdAndActiveTrue(Long transporterId);
+
     List<Enrollment> findByDependentGuardianId(Long guardianId);
 
     Optional<Enrollment> findFirstByDependentGuardianIdAndActiveTrue(Long guardianId);

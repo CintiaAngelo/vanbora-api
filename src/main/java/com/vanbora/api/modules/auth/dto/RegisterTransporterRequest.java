@@ -17,6 +17,8 @@ public record RegisterTransporterRequest(
         String plate,
         List<String> schools,
         List<String> neighborhoods,
-        BigDecimal baseMonthlyFee
+        BigDecimal baseMonthlyFee,
+        /** Aceite da Política de Privacidade + Termos de Uso (LGPD). Obrigatório. */
+        boolean acceptedTerms
 ) {
 }

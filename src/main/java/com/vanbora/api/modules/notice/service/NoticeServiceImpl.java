@@ -192,9 +192,7 @@ public class NoticeServiceImpl implements NoticeService {
         GuardianProfile guardian = resolveGuardian(guardianUserId);
         return noticeRepository.findVisibleForGuardian(guardian.getId(), Instant.now()).stream()
                 .sorted(urgentFirst())
-                .map(n -> GuardianNoticeResponse.from(
-                        n, reactionRepository.findByNoticeId(n.getId()),
-                        guardianUserId, commentRepository.countByNoticeId(n.getId())))
+                .map(n -> guardianResponse(n, guardianUserId))
                 .toList();
     }
 
@@ -278,11 +276,17 @@ public class NoticeServiceImpl implements NoticeService {
     }
 
     private GuardianNoticeResponse guardianResponse(Notice notice, Long guardianUserId) {
+        List<NoticeReaction> reactions = reactionRepository.findByNoticeId(notice.getId());
+        boolean reacted = reactions.stream().anyMatch(r -> r.getUser().getId().equals(guardianUserId));
+        boolean acknowledged = reacted
+                || viewRepository.existsByNoticeIdAndUserId(notice.getId(), guardianUserId)
+                || commentRepository.existsByNoticeIdAndAuthorId(notice.getId(), guardianUserId);
         return GuardianNoticeResponse.from(
                 notice,
-                reactionRepository.findByNoticeId(notice.getId()),
+                reactions,
                 guardianUserId,
-                commentRepository.countByNoticeId(notice.getId()));
+                commentRepository.countByNoticeId(notice.getId()),
+                acknowledged);
     }
 
     private void markViewed(Notice notice, Long userId) {

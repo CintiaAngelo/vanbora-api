@@ -17,7 +17,8 @@ public record TransporterProfileResponse(
         boolean acceptsProposals,
         List<String> schools,
         List<String> neighborhoods,
-        List<HelperResponse> helpers
+        List<HelperResponse> helpers,
+        String contractTemplate
 ) {
     public static TransporterProfileResponse from(TransporterProfile t, List<HelperResponse> helpers) {
         return new TransporterProfileResponse(
@@ -32,6 +33,7 @@ public record TransporterProfileResponse(
                 t.isAcceptsProposals(),
                 List.copyOf(t.getSchools()),
                 List.copyOf(t.getNeighborhoods()),
-                helpers);
+                helpers,
+                t.getContractTemplate());
     }
 }

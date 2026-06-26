@@ -1,6 +1,7 @@
 package com.vanbora.api.modules.guardian.dto;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -21,7 +22,14 @@ public record GuardianDashboardResponse(
         Boolean goingToday,
         List<DayAttendance> weekAttendance,
         NextPayment nextPayment,
-        TransporterNotice notice
+        TransporterNotice notice,
+        /** Solicitação pendente de aceite do transportador (acompanhamento na home). */
+        Long pendingHireRequestId,
+        String pendingHireTransporterName,
+        Instant pendingHireExpiresAt,
+        /** Solicitação recusada ainda não dispensada pelo responsável. */
+        Long rejectedHireRequestId,
+        String rejectedHireTransporterName
 ) {
     /** Presença em um dia da semana (rótulo SEG..SEX + data ISO + se vai). */
     public record DayAttendance(String day, String date, boolean present) {

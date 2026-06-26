@@ -24,4 +24,7 @@ public interface ContractRepository extends JpaRepository<Contract, Long> {
     /** Contrato mais recente de um dependente num status (ex.: pendente de assinatura). */
     Optional<Contract> findFirstByGuardianIdAndDependentIdAndStatusOrderByIdDesc(
             Long guardianId, Long dependentId, ContractStatus status);
+
+    /** Quantidade de contratos num status para o transportador (ex.: cancelados = churn). */
+    long countByTransporterIdAndStatus(Long transporterId, ContractStatus status);
 }

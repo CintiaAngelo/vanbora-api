@@ -13,7 +13,10 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -45,4 +48,27 @@ public class HireRequest extends BaseEntity {
     /** Valor proposto pelo responsável (quando o transportador aceita propostas). Null = valor de tabela. */
     @Column(name = "proposed_fee", precision = 10, scale = 2)
     private BigDecimal proposedFee;
+
+    /** Prazo para o transportador responder; após isso, expira automaticamente. */
+    @Column(name = "expires_at")
+    private Instant expiresAt;
+
+    /** Quando o responsável dispensou o aviso de recusa na home (null = ainda visível). */
+    @Column(name = "guardian_dismissed_at")
+    private Instant guardianDismissedAt;
+
+    /** Janela padrão (em dias) para o transportador aceitar/recusar a solicitação. */
+    public static final int TTL_DAYS = 3;
+
+    /** Prazo efetivo: usa expiresAt; se nulo (registros antigos), assume created + TTL. */
+    @Transient
+    public Instant effectiveExpiry() {
+        return expiresAt != null ? expiresAt : getCreatedAt().plus(TTL_DAYS, ChronoUnit.DAYS);
+    }
+
+    /** Solicitação pendente cujo prazo já passou. */
+    @Transient
+    public boolean isOverdue() {
+        return status == HireStatus.PENDING && effectiveExpiry().isBefore(Instant.now());
+    }
 }

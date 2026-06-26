@@ -2,6 +2,7 @@ package com.vanbora.api.modules.transporter.service;
 
 import com.vanbora.api.modules.transporter.dto.CreateHelperRequest;
 import com.vanbora.api.modules.transporter.dto.HelperResponse;
+import com.vanbora.api.modules.transporter.dto.ServiceAreaOptionsResponse;
 import com.vanbora.api.modules.transporter.dto.TransporterDetailResponse;
 import com.vanbora.api.modules.transporter.dto.TransporterProfileResponse;
 import com.vanbora.api.modules.transporter.dto.TransporterSummaryResponse;
@@ -17,6 +18,9 @@ public interface TransporterService {
 
     List<TransporterSummaryResponse> search(String school, String neighborhood, String sort);
 
+    /** Escolas e bairros já cadastrados (para os autocompletes da busca), em ordem alfabética. */
+    ServiceAreaOptionsResponse getServiceAreaOptions();
+
     TransporterDetailResponse getPublicProfile(Long transporterId);
 
     TransporterProfileResponse getMyProfile(Long userId);
@@ -28,6 +32,9 @@ public interface TransporterService {
     TransporterProfileResponse updateServiceArea(Long userId, UpdateServiceAreaRequest request);
 
     TransporterProfileResponse updatePricing(Long userId, UpdatePricingRequest request);
+
+    /** Define/limpa o modelo de contrato (texto) usado na assinatura do responsável. */
+    TransporterProfileResponse updateContractTemplate(Long userId, String template);
 
     TransporterProfileResponse setMyPhoto(Long userId, MultipartFile file);
 

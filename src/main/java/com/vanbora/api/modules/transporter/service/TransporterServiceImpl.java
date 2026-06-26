@@ -5,6 +5,7 @@ import com.vanbora.api.modules.transporter.domain.TransporterProfile;
 import com.vanbora.api.modules.transporter.dto.CreateHelperRequest;
 import com.vanbora.api.modules.transporter.dto.HelperResponse;
 import com.vanbora.api.modules.transporter.dto.ReviewResponse;
+import com.vanbora.api.modules.transporter.dto.ServiceAreaOptionsResponse;
 import com.vanbora.api.modules.transporter.dto.TransporterDetailResponse;
 import com.vanbora.api.modules.transporter.dto.TransporterProfileResponse;
 import com.vanbora.api.modules.transporter.dto.TransporterSummaryResponse;
@@ -19,9 +20,11 @@ import com.vanbora.api.shared.exception.BusinessException;
 import com.vanbora.api.shared.exception.ResourceNotFoundException;
 import com.vanbora.api.shared.validation.DocumentValidations;
 import com.vanbora.api.shared.storage.StorageService;
+import java.text.Collator;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,6 +61,13 @@ public class TransporterServiceImpl implements TransporterService {
                 .sorted(comparatorFor(sort))
                 .map(TransporterSummaryResponse::from)
                 .toList();
+    }
+
+    @Override
+    public ServiceAreaOptionsResponse getServiceAreaOptions() {
+        return new ServiceAreaOptionsResponse(
+                sortedPtBr(transporterRepository.findDistinctSchools()),
+                sortedPtBr(transporterRepository.findDistinctNeighborhoods()));
     }
 
     @Override
@@ -122,6 +132,15 @@ public class TransporterServiceImpl implements TransporterService {
             transporter.setBaseMonthlyFee(request.baseMonthlyFee());
         }
         transporter.setAcceptsProposals(request.acceptsProposals());
+        return profileResponse(transporterRepository.save(transporter));
+    }
+
+    @Override
+    @Transactional
+    public TransporterProfileResponse updateContractTemplate(Long userId, String template) {
+        TransporterProfile transporter = findByUserOrThrow(userId);
+        String cleaned = (template == null || template.isBlank()) ? null : template.trim();
+        transporter.setContractTemplate(cleaned);
         return profileResponse(transporterRepository.save(transporter));
     }
 
@@ -207,6 +226,15 @@ public class TransporterServiceImpl implements TransporterService {
             throw new BusinessException("Este ajudante não pertence ao transportador autenticado.");
         }
         return helper;
+    }
+
+    /** Ordena alfabeticamente respeitando acentuação do português (a, á, b, ç, ...). */
+    private List<String> sortedPtBr(List<String> values) {
+        Collator collator = Collator.getInstance(Locale.of("pt", "BR"));
+        return values.stream()
+                .filter(StringUtils::hasText)
+                .sorted(collator)
+                .toList();
     }
 
     private Set<String> cleanSet(List<String> values) {

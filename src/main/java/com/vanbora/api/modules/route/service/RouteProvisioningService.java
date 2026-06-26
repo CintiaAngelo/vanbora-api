@@ -87,6 +87,15 @@ public class RouteProvisioningService {
         }
     }
 
+    /**
+     * Remove o aluno da rota ao cancelar a matrícula (sua parada de embarque some
+     * do mapa do transportador). A parada da escola permanece — é compartilhada.
+     */
+    @Transactional
+    public void deprovisionForDependent(Long transporterId, Long dependentId) {
+        routeStopRepository.deleteByTransporterIdAndDependentId(transporterId, dependentId);
+    }
+
     private String homeAddress(GuardianProfile guardian) {
         StringBuilder sb = new StringBuilder();
         appendPart(sb, guardian.getStreet());
