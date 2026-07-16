@@ -8,6 +8,8 @@ import com.vanbora.api.modules.transporter.repository.TransporterProfileReposito
 import com.vanbora.api.shared.enums.RouteStopStatus;
 import com.vanbora.api.shared.exception.ResourceNotFoundException;
 import com.vanbora.api.shared.util.GeoUtils;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -16,6 +18,12 @@ import org.springframework.transaction.annotation.Transactional;
 /** Implementação da rota do dia, incluindo otimização vizinho-mais-próximo. */
 @Service
 public class RouteServiceImpl implements RouteService {
+
+    // Estimativas de trajeto: fator de rua (distância real ≈ 1,3× a linha reta) e
+    // velocidade média de van escolar urbana (com paradas). Valores aproximados.
+    private static final double ROAD_FACTOR = 1.3;
+    private static final double AVG_SPEED_KMH = 24.0;
+    private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
 
     private final RouteStopRepository routeStopRepository;
     private final TransporterProfileRepository transporterRepository;
@@ -29,10 +37,10 @@ public class RouteServiceImpl implements RouteService {
     @Override
     @Transactional(readOnly = true)
     public List<RouteStopResponse> listForUser(Long userId) {
-        Long transporterId = requireTransporter(userId).getId();
-        return routeStopRepository.findByTransporterIdOrderByPositionAsc(transporterId).stream()
-                .map(RouteStopResponse::from)
-                .toList();
+        TransporterProfile transporter = requireTransporter(userId);
+        List<RouteStop> stops = routeStopRepository
+                .findByTransporterIdOrderByPositionAsc(transporter.getId());
+        return annotate(stops, transporter.getCurrentLatitude(), transporter.getCurrentLongitude());
     }
 
     @Override
@@ -63,7 +71,49 @@ public class RouteServiceImpl implements RouteService {
         }
         routeStopRepository.saveAll(ordered);
 
-        return ordered.stream().map(RouteStopResponse::from).toList();
+        return annotate(ordered, transporter.getCurrentLatitude(), transporter.getCurrentLongitude());
+    }
+
+    /**
+     * Anota cada parada (na ordem dada) com a distância do ponto anterior, a
+     * distância acumulada, os minutos desde a partida e o horário previsto de
+     * chegada, partindo da posição atual do transportador.
+     */
+    private List<RouteStopResponse> annotate(List<RouteStop> ordered, Double startLat, Double startLon) {
+        List<RouteStopResponse> result = new ArrayList<>();
+        Double prevLat = startLat;
+        Double prevLon = startLon;
+        double cumulative = 0.0;
+        LocalTime now = LocalTime.now();
+
+        for (RouteStop stop : ordered) {
+            Double leg = null;
+            Double cumOut = null;
+            Integer etaMin = null;
+            String etaClock = null;
+
+            if (stop.getLatitude() != null && stop.getLongitude() != null) {
+                if (prevLat != null && prevLon != null) {
+                    double straight = GeoUtils.haversineKm(
+                            prevLat, prevLon, stop.getLatitude(), stop.getLongitude());
+                    leg = round1(straight * ROAD_FACTOR);
+                    cumulative += leg;
+                } else {
+                    leg = 0.0;
+                }
+                cumOut = round1(cumulative);
+                etaMin = (int) Math.round(cumulative / AVG_SPEED_KMH * 60.0);
+                etaClock = now.plusMinutes(etaMin).format(HH_MM);
+                prevLat = stop.getLatitude();
+                prevLon = stop.getLongitude();
+            }
+            result.add(RouteStopResponse.from(stop, leg, cumOut, etaMin, etaClock));
+        }
+        return result;
+    }
+
+    private double round1(double value) {
+        return Math.round(value * 10.0) / 10.0;
     }
 
     /**
