@@ -48,6 +48,16 @@ vanbora:
     provider: ${VANBORA_PAYMENTS_PROVIDER:simulated}
     mercadopago:
       access-token: ${MERCADOPAGO_ACCESS_TOKEN:}
+  # Taxas (frações; ex.: 0.05 = 5%). Fonte única do cálculo financeiro, também
+  # exposta ao app em GET /api/config/fees. A taxa do gateway é ilustrativa
+  # (crédito à vista) — confirme com o contrato do provedor antes de produção.
+  fees:
+    admin-monthly: ${VANBORA_FEE_ADMIN_MONTHLY:0.05}
+    admin-annual: ${VANBORA_FEE_ADMIN_ANNUAL:0.04}
+    gateway-rate: ${VANBORA_FEE_GATEWAY_RATE:0.0498}
+    gateway-fixed: ${VANBORA_FEE_GATEWAY_FIXED:0.00}
+    fidelity-months: ${VANBORA_FEE_FIDELITY_MONTHS:12}
+    installment-fine: ${VANBORA_FEE_INSTALLMENT_FINE:0.50}
 
 springdoc:
   swagger-ui:

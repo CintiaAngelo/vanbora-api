@@ -1,8 +1,10 @@
 package com.vanbora.api.modules.transporter.service;
 
 import com.vanbora.api.modules.transporter.domain.Helper;
+import com.vanbora.api.modules.transporter.domain.PriceZone;
 import com.vanbora.api.modules.transporter.domain.TransporterProfile;
 import com.vanbora.api.modules.transporter.dto.CreateHelperRequest;
+import com.vanbora.api.modules.transporter.dto.PriceZoneInput;
 import com.vanbora.api.modules.transporter.dto.HelperResponse;
 import com.vanbora.api.modules.transporter.dto.ReviewResponse;
 import com.vanbora.api.modules.transporter.dto.ServiceAreaOptionsResponse;
@@ -22,10 +24,13 @@ import com.vanbora.api.shared.validation.DocumentValidations;
 import com.vanbora.api.shared.storage.StorageService;
 import java.text.Collator;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -128,11 +133,55 @@ public class TransporterServiceImpl implements TransporterService {
     @Transactional
     public TransporterProfileResponse updatePricing(Long userId, UpdatePricingRequest request) {
         TransporterProfile transporter = findByUserOrThrow(userId);
-        if (request.baseMonthlyFee() != null) {
-            transporter.setBaseMonthlyFee(request.baseMonthlyFee());
+        if (request.monthlyFee() != null) {
+            transporter.setBaseMonthlyFee(request.monthlyFee());
         }
+        // Anual/parcelado nulos ⇒ plano não oferecido (limpa o valor).
+        transporter.setAnnualPlanFee(request.annualFee());
+        transporter.setInstallmentMonthlyFee(request.installmentMonthlyFee());
         transporter.setAcceptsProposals(request.acceptsProposals());
+        syncPriceZones(transporter, request.zones());
         return profileResponse(transporterRepository.save(transporter));
+    }
+
+    /**
+     * Sincroniza as zonas de preço com a lista enviada: cria as novas (id nulo),
+     * atualiza as existentes e remove (orphanRemoval) as que sumiram. Zonas sem
+     * nome ou sem mensalidade são ignoradas. Lista nula ⇒ não mexe nas zonas.
+     */
+    private void syncPriceZones(TransporterProfile transporter, List<PriceZoneInput> inputs) {
+        if (inputs == null) {
+            return;
+        }
+        List<PriceZone> current = transporter.getPriceZones();
+        Map<Long, PriceZone> byId = current.stream()
+                .filter(z -> z.getId() != null)
+                .collect(Collectors.toMap(PriceZone::getId, z -> z));
+
+        Set<Long> keepIds = new HashSet<>();
+        for (PriceZoneInput in : inputs) {
+            if (in.name() == null || in.name().isBlank() || in.monthlyFee() == null) {
+                continue;
+            }
+            PriceZone zone = in.id() != null ? byId.get(in.id()) : null;
+            if (zone == null) {
+                zone = new PriceZone();
+                zone.setTransporter(transporter);
+                current.add(zone);
+            }
+            zone.setName(in.name().trim());
+            zone.setSchool(StringUtils.hasText(in.school()) ? in.school().trim() : null);
+            zone.setMonthlyFee(in.monthlyFee());
+            zone.setAnnualFee(in.annualFee());
+            zone.setInstallmentMonthlyFee(in.installmentMonthlyFee());
+            zone.getNeighborhoods().clear();
+            zone.getNeighborhoods().addAll(
+                    cleanSet(in.neighborhoods() == null ? List.of() : in.neighborhoods()));
+            if (zone.getId() != null) {
+                keepIds.add(zone.getId());
+            }
+        }
+        current.removeIf(z -> z.getId() != null && !keepIds.contains(z.getId()));
     }
 
     @Override

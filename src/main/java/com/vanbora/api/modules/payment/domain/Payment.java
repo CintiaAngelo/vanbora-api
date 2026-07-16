@@ -2,6 +2,7 @@ package com.vanbora.api.modules.payment.domain;
 
 import com.vanbora.api.modules.enrollment.domain.Enrollment;
 import com.vanbora.api.shared.domain.BaseEntity;
+import com.vanbora.api.shared.enums.PaymentKind;
 import com.vanbora.api.shared.enums.PaymentStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -38,6 +39,11 @@ public class Payment extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private PaymentStatus status;
+
+    /** Natureza do lançamento. Nullable (ddl-auto em tabela populada); null ⇒ MENSALIDADE. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private PaymentKind kind = PaymentKind.MENSALIDADE;
 
     @Column(name = "due_date")
     private LocalDate dueDate;

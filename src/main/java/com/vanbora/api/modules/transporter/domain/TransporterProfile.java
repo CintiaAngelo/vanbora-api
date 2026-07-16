@@ -52,8 +52,17 @@ public class TransporterProfile extends BaseEntity {
     @Column(name = "reviews_count")
     private Integer reviewsCount = 0;
 
+    /** Plano MENSAL (mais caro, sem fidelidade). É o valor de tabela histórico. */
     @Column(name = "base_monthly_fee", precision = 10, scale = 2)
     private BigDecimal baseMonthlyFee = BigDecimal.ZERO;
+
+    /** Plano ANUAL: valor total do ano pago à vista. Nullable ⇒ plano não oferecido. */
+    @Column(name = "annual_plan_fee", precision = 10, scale = 2)
+    private BigDecimal annualPlanFee;
+
+    /** Plano PARCELADO: mensalidade (menor) com fidelidade. Nullable ⇒ não oferecido. */
+    @Column(name = "installment_monthly_fee", precision = 10, scale = 2)
+    private BigDecimal installmentMonthlyFee;
 
     /** Se aceita propostas de valor do responsável. NULLABLE (ddl-auto): null ⇒ não. */
     @Column(name = "accepts_proposals")
@@ -73,6 +82,19 @@ public class TransporterProfile extends BaseEntity {
 
     @Column(name = "location_updated_at")
     private Instant locationUpdatedAt;
+
+    /** Interruptor mestre do compartilhamento de localização. Nullable ⇒ desligado. */
+    @Column(name = "location_sharing_enabled")
+    private Boolean locationSharingEnabled = false;
+
+    /** Considera nulo como "compartilhamento desligado". */
+    public boolean isLocationSharingEnabled() {
+        return Boolean.TRUE.equals(locationSharingEnabled);
+    }
+
+    /** Janelas em que a localização é compartilhada automaticamente. */
+    @OneToMany(mappedBy = "transporter", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<LocationShareWindow> locationShareWindows = new ArrayList<>();
 
     /** Configurações financeiras (nullable para o ddl-auto em tabela populada). */
     @Column(name = "monthly_revenue_goal", precision = 10, scale = 2)

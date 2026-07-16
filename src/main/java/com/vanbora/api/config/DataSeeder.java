@@ -127,6 +127,9 @@ public class DataSeeder {
             roberto.setCurrentLatitude(ROBERTO_START_LAT);
             roberto.setCurrentLongitude(ROBERTO_START_LON);
             roberto.setLocationUpdatedAt(Instant.now());
+            // Planos (mensal já vem do baseMonthlyFee; anual à vista e parcelado com desconto).
+            roberto.setAnnualPlanFee(new BigDecimal("3600.00"));
+            roberto.setInstallmentMonthlyFee(new BigDecimal("320.00"));
             // Configurações financeiras de demonstração.
             roberto.setMonthlyRevenueGoal(new BigDecimal("5000.00"));
             roberto.setMaintenanceIntervalKm(5000);

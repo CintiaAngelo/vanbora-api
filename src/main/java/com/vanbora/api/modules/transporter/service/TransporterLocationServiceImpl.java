@@ -2,15 +2,23 @@ package com.vanbora.api.modules.transporter.service;
 
 import com.vanbora.api.modules.finance.domain.DailyDistance;
 import com.vanbora.api.modules.finance.repository.DailyDistanceRepository;
+import com.vanbora.api.modules.transporter.domain.LocationShareWindow;
 import com.vanbora.api.modules.transporter.domain.TransporterProfile;
+import com.vanbora.api.modules.transporter.dto.LocationSharingResponse;
+import com.vanbora.api.modules.transporter.dto.LocationWindowInput;
 import com.vanbora.api.modules.transporter.dto.TransporterLocationResponse;
 import com.vanbora.api.modules.transporter.dto.UpdateLocationRequest;
+import com.vanbora.api.modules.transporter.dto.UpdateLocationSharingRequest;
 import com.vanbora.api.modules.transporter.repository.TransporterProfileRepository;
+import com.vanbora.api.shared.exception.BusinessException;
 import com.vanbora.api.shared.exception.ResourceNotFoundException;
 import com.vanbora.api.shared.util.GeoUtils;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +54,53 @@ public class TransporterLocationServiceImpl implements TransporterLocationServic
         transporterRepository.save(transporter);
 
         return TransporterLocationResponse.from(transporter);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public LocationSharingResponse getSharing(Long userId) {
+        return LocationSharingResponse.from(requireTransporter(userId));
+    }
+
+    @Override
+    @Transactional
+    public LocationSharingResponse updateSharing(Long userId, UpdateLocationSharingRequest request) {
+        TransporterProfile transporter = requireTransporter(userId);
+        transporter.setLocationSharingEnabled(request.enabled());
+
+        // Substitui todas as janelas pela lista enviada (orphanRemoval cuida das removidas).
+        transporter.getLocationShareWindows().clear();
+        List<LocationWindowInput> windows = request.windows();
+        if (windows != null) {
+            for (LocationWindowInput in : windows) {
+                LocalTime start = parseTime(in.startTime());
+                LocalTime end = parseTime(in.endTime());
+                if (!end.isAfter(start)) {
+                    throw new BusinessException("O fim da janela deve ser após o início.");
+                }
+                LocationShareWindow window = new LocationShareWindow();
+                window.setTransporter(transporter);
+                window.setDayOfWeek(in.dayOfWeek());
+                window.setStartTime(start);
+                window.setEndTime(end);
+                transporter.getLocationShareWindows().add(window);
+            }
+        }
+        transporterRepository.save(transporter);
+        return LocationSharingResponse.from(transporter);
+    }
+
+    private LocalTime parseTime(String value) {
+        try {
+            return LocalTime.parse(value);
+        } catch (DateTimeParseException e) {
+            throw new BusinessException("Horário inválido: " + value + " (use HH:mm).");
+        }
+    }
+
+    private TransporterProfile requireTransporter(Long userId) {
+        return transporterRepository.findByUserId(userId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Perfil de transportador", userId));
     }
 
     /** Soma o trecho percorrido desde o último ping ao km de hoje, com filtros. */

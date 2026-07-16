@@ -14,9 +14,12 @@ public record TransporterProfileResponse(
         String cnh,
         String plate,
         BigDecimal baseMonthlyFee,
+        BigDecimal annualPlanFee,
+        BigDecimal installmentMonthlyFee,
         boolean acceptsProposals,
         List<String> schools,
         List<String> neighborhoods,
+        List<PriceZoneResponse> priceZones,
         List<HelperResponse> helpers,
         String contractTemplate
 ) {
@@ -30,9 +33,12 @@ public record TransporterProfileResponse(
                 t.getCnh(),
                 t.getPlate(),
                 t.getBaseMonthlyFee(),
+                t.getAnnualPlanFee(),
+                t.getInstallmentMonthlyFee(),
                 t.isAcceptsProposals(),
                 List.copyOf(t.getSchools()),
                 List.copyOf(t.getNeighborhoods()),
+                t.getPriceZones().stream().map(PriceZoneResponse::from).toList(),
                 helpers,
                 t.getContractTemplate());
     }

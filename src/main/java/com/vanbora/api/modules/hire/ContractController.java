@@ -1,6 +1,7 @@
 package com.vanbora.api.modules.hire;
 
 import com.vanbora.api.modules.hire.dto.CancelContractRequest;
+import com.vanbora.api.modules.hire.dto.CancellationPreviewResponse;
 import com.vanbora.api.modules.hire.dto.ContractResponse;
 import com.vanbora.api.modules.hire.dto.SignContractRequest;
 import com.vanbora.api.modules.hire.service.ContractService;
@@ -44,13 +45,21 @@ public class ContractController {
 
     @PostMapping("/{id}/sign")
     public ContractResponse sign(@PathVariable Long id, @Valid @RequestBody SignContractRequest request) {
-        return contractService.sign(currentUserProvider.requireUserId(), id, request.paymentMethodId());
+        return contractService.sign(
+                currentUserProvider.requireUserId(), id, request.paymentMethodId(), request.planType());
     }
 
-    /** Cancela o contrato — exige avaliação obrigatória do transportador. */
+    /** Prévia da rescisão: multa (fidelidade) ou reembolso (anual) antes de confirmar. */
+    @GetMapping("/{id}/cancellation-preview")
+    public CancellationPreviewResponse cancellationPreview(@PathVariable Long id) {
+        return contractService.cancellationPreview(currentUserProvider.requireUserId(), id);
+    }
+
+    /** Cancela (rescinde) o contrato — exige avaliação; cobra a multa quando há fidelidade. */
     @PostMapping("/{id}/cancel")
     public ContractResponse cancel(@PathVariable Long id, @Valid @RequestBody CancelContractRequest request) {
         return contractService.cancel(
-                currentUserProvider.requireUserId(), id, request.rating(), request.comment());
+                currentUserProvider.requireUserId(), id,
+                request.rating(), request.comment(), request.paymentMethodId());
     }
 }

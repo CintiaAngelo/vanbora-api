@@ -33,8 +33,17 @@ public class PriceZone extends BaseEntity {
 
     private String school;
 
+    /** Plano MENSAL desta zona (override do valor default do transportador). */
     @Column(name = "monthly_fee", precision = 10, scale = 2, nullable = false)
     private BigDecimal monthlyFee;
+
+    /** Plano ANUAL (total à vista) desta zona. Nullable ⇒ usa o default do perfil. */
+    @Column(name = "annual_fee", precision = 10, scale = 2)
+    private BigDecimal annualFee;
+
+    /** Plano PARCELADO (mensalidade) desta zona. Nullable ⇒ usa o default do perfil. */
+    @Column(name = "installment_monthly_fee", precision = 10, scale = 2)
+    private BigDecimal installmentMonthlyFee;
 
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "price_zone_neighborhoods", joinColumns = @JoinColumn(name = "price_zone_id"))

@@ -159,6 +159,9 @@ public class HireServiceImpl implements HireService {
         contract.setMonthlyFee(hire.getProposedFee() != null
                 ? hire.getProposedFee()
                 : hire.getTransporter().getBaseMonthlyFee());
+        // Congela os demais planos ofertados (anual/parcelado) para o responsável escolher ao assinar.
+        contract.setAnnualPlanFee(hire.getTransporter().getAnnualPlanFee());
+        contract.setInstallmentMonthlyFee(hire.getTransporter().getInstallmentMonthlyFee());
         contract.setStatus(ContractStatus.PENDING_SIGNATURE);
         contract.setSignatureToken(UUID.randomUUID().toString().replace("-", ""));
         // Congela o texto (modelo do transportador ou padrão) que o responsável assinará.

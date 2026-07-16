@@ -37,4 +37,19 @@ public class NotificationService {
                   Link de assinatura: {}""",
                 to, transporter, transporter, contract.getDependent().getName(), link);
     }
+
+    /** Avisa o transportador que o responsável rescindiu (cancelou) o contrato. */
+    public void notifyContractCancelled(Contract contract) {
+        String to = contract.getTransporter().getUser().getEmail();
+        String guardian = contract.getGuardian().getUser().getName();
+        String student = contract.getDependent().getName();
+
+        log.info("""
+                [E-MAIL SIMULADO]
+                  Para: {}
+                  Assunto: Contrato de {} cancelado
+                  Corpo: {} cancelou o contrato de transporte do(a) aluno(a) {}.
+                         O aluno foi removido da sua rota. Verifique o app para detalhes.""",
+                to, student, guardian, student);
+    }
 }
