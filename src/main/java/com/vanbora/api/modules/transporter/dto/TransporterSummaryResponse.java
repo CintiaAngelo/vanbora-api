@@ -13,9 +13,11 @@ public record TransporterSummaryResponse(
         int reviewsCount,
         List<String> schools,
         List<String> neighborhoods,
-        BigDecimal monthlyFee
+        BigDecimal monthlyFee,
+        /** true = atende a escola/bairro buscado (aparece na seção "perto de você"). */
+        boolean nearby
 ) {
-    public static TransporterSummaryResponse from(TransporterProfile t) {
+    public static TransporterSummaryResponse from(TransporterProfile t, boolean nearby) {
         return new TransporterSummaryResponse(
                 t.getId(),
                 t.getUser().getName(),
@@ -24,6 +26,7 @@ public record TransporterSummaryResponse(
                 t.getReviewsCount() == null ? 0 : t.getReviewsCount(),
                 List.copyOf(t.getSchools()),
                 List.copyOf(t.getNeighborhoods()),
-                t.getBaseMonthlyFee());
+                t.getBaseMonthlyFee(),
+                nearby);
     }
 }

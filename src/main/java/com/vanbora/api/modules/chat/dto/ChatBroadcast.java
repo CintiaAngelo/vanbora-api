@@ -11,6 +11,8 @@ public record ChatBroadcast(
         String text,
         String time,
         Long senderUserId,
-        String senderName
+        String senderName,
+        String type,
+        String mediaUrl
 ) {
 }

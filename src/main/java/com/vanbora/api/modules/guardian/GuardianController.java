@@ -9,6 +9,7 @@ import com.vanbora.api.modules.guardian.dto.GuardianTrackingResponse;
 import com.vanbora.api.modules.guardian.dto.PaymentScheduleItemResponse;
 import com.vanbora.api.modules.guardian.dto.SetAttendanceRequest;
 import com.vanbora.api.modules.guardian.dto.UpdateAddressRequest;
+import com.vanbora.api.modules.guardian.dto.UpdateBioRequest;
 import com.vanbora.api.modules.guardian.service.GuardianService;
 import com.vanbora.api.modules.payment.dto.PaymentResponse;
 import com.vanbora.api.security.CurrentUserProvider;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /** Endpoints do responsável autenticado. */
 @RestController
@@ -53,6 +55,25 @@ public class GuardianController {
     @PutMapping("/address")
     public GuardianProfileResponse updateAddress(@Valid @RequestBody UpdateAddressRequest request) {
         return guardianService.updateAddress(userId(), request);
+    }
+
+    /** Atualiza a descrição/biografia do responsável. */
+    @PutMapping("/bio")
+    public GuardianProfileResponse updateBio(@Valid @RequestBody UpdateBioRequest request) {
+        return guardianService.updateBio(userId(), request.bio());
+    }
+
+    /** Define/atualiza a foto do responsável. */
+    @PostMapping("/photo")
+    public GuardianProfileResponse uploadPhoto(@RequestParam("file") MultipartFile file) {
+        return guardianService.setMyPhoto(userId(), file);
+    }
+
+    /** Define/atualiza a foto de um dependente. */
+    @PostMapping("/dependents/{id}/photo")
+    public DependentResponse uploadDependentPhoto(
+            @PathVariable Long id, @RequestParam("file") MultipartFile file) {
+        return guardianService.setDependentPhoto(userId(), id, file);
     }
 
     @GetMapping("/dashboard")

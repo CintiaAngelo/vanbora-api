@@ -116,6 +116,11 @@ public class TransporterProfile extends BaseEntity {
     @Column(name = "contract_template")
     private String contractTemplate;
 
+    /** Descrição/biografia livre do transportador. LONGVARCHAR ⇒ TEXT no MySQL. */
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
+    @Column(name = "bio")
+    private String bio;
+
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "transporter_schools", joinColumns = @JoinColumn(name = "transporter_id"))
     @Column(name = "school")

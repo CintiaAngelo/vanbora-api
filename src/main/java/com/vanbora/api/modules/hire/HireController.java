@@ -1,6 +1,7 @@
 package com.vanbora.api.modules.hire;
 
 import com.vanbora.api.modules.hire.dto.CreateHireRequest;
+import com.vanbora.api.modules.hire.dto.GuardianForTransporterResponse;
 import com.vanbora.api.modules.hire.dto.HireRequestResponse;
 import com.vanbora.api.modules.hire.service.HireService;
 import com.vanbora.api.security.CurrentUserProvider;
@@ -8,6 +9,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -33,6 +35,13 @@ public class HireController {
         HireRequestResponse response =
                 hireService.requestHire(currentUserProvider.requireUserId(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /** [Transportador] Perfil do responsável de uma solicitação recebida. */
+    @GetMapping("/{id}/guardian")
+    @PreAuthorize("hasRole('TRANSPORTER')")
+    public GuardianForTransporterResponse guardian(@PathVariable Long id) {
+        return hireService.getGuardianForRequest(currentUserProvider.requireUserId(), id);
     }
 
     @PostMapping("/{id}/accept")

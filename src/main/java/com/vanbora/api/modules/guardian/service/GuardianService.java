@@ -11,6 +11,7 @@ import com.vanbora.api.modules.guardian.dto.UpdateAddressRequest;
 import com.vanbora.api.modules.payment.dto.PaymentResponse;
 import java.time.LocalDate;
 import java.util.List;
+import org.springframework.web.multipart.MultipartFile;
 
 /** Casos de uso do responsável. */
 public interface GuardianService {
@@ -19,6 +20,15 @@ public interface GuardianService {
 
     /** Atualiza os endereços de embarque/entrega (e regeocodifica). */
     GuardianProfileResponse updateAddress(Long userId, UpdateAddressRequest request);
+
+    /** Atualiza a descrição/biografia do responsável. */
+    GuardianProfileResponse updateBio(Long userId, String bio);
+
+    /** Define/atualiza a foto do responsável. */
+    GuardianProfileResponse setMyPhoto(Long userId, MultipartFile file);
+
+    /** Define/atualiza a foto de um dependente. */
+    DependentResponse setDependentPhoto(Long userId, Long dependentId, MultipartFile file);
 
     List<DependentResponse> listDependents(Long userId);
 

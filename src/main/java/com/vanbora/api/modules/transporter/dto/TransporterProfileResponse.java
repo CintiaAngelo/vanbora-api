@@ -21,7 +21,8 @@ public record TransporterProfileResponse(
         List<String> neighborhoods,
         List<PriceZoneResponse> priceZones,
         List<HelperResponse> helpers,
-        String contractTemplate
+        String contractTemplate,
+        String bio
 ) {
     public static TransporterProfileResponse from(TransporterProfile t, List<HelperResponse> helpers) {
         return new TransporterProfileResponse(
@@ -40,6 +41,7 @@ public record TransporterProfileResponse(
                 List.copyOf(t.getNeighborhoods()),
                 t.getPriceZones().stream().map(PriceZoneResponse::from).toList(),
                 helpers,
-                t.getContractTemplate());
+                t.getContractTemplate(),
+                t.getBio());
     }
 }

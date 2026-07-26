@@ -37,13 +37,18 @@ public class TransporterController {
         this.currentUserProvider = currentUserProvider;
     }
 
-    /** Busca por escola/bairro, ordenável por preço (padrão) ou avaliação. */
+    /**
+     * Busca transportadores: os que atendem a escola/bairro informados vêm primeiro
+     * ("perto de você"), os demais embaixo. Ordena por preço (padrão) ou avaliação,
+     * na direção asc (padrão) ou desc.
+     */
     @GetMapping
     public List<TransporterSummaryResponse> search(
             @RequestParam(required = false) String school,
             @RequestParam(required = false) String neighborhood,
-            @RequestParam(required = false, defaultValue = "price") String sort) {
-        return transporterService.search(school, neighborhood, sort);
+            @RequestParam(required = false, defaultValue = "price") String sort,
+            @RequestParam(required = false, defaultValue = "asc") String dir) {
+        return transporterService.search(school, neighborhood, sort, dir);
     }
 
     /** Escolas e bairros já cadastrados, em ordem alfabética, para os filtros da busca. */
@@ -86,6 +91,14 @@ public class TransporterController {
             @RequestBody UpdateContractTemplateRequest request) {
         return transporterService.updateContractTemplate(
                 currentUserProvider.requireUserId(), request.template());
+    }
+
+    /** Atualiza a descrição/biografia do transportador. */
+    @PutMapping("/me/bio")
+    @PreAuthorize("hasRole('TRANSPORTER')")
+    public TransporterProfileResponse updateBio(
+            @jakarta.validation.Valid @RequestBody com.vanbora.api.modules.transporter.dto.UpdateBioRequest request) {
+        return transporterService.updateBio(currentUserProvider.requireUserId(), request.bio());
     }
 
     /** Define/atualiza a foto do transportador. */

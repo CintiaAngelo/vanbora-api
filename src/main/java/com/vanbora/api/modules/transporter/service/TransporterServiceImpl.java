@@ -58,14 +58,33 @@ public class TransporterServiceImpl implements TransporterService {
     }
 
     @Override
-    public List<TransporterSummaryResponse> search(String school, String neighborhood, String sort) {
-        String schoolFilter = normalize(school);
-        String neighborhoodFilter = normalize(neighborhood);
+    public List<TransporterSummaryResponse> search(String school, String neighborhood, String sort, String dir) {
+        String schoolRef = normalize(school);
+        String neighborhoodRef = normalize(neighborhood);
+        boolean hasRef = schoolRef != null || neighborhoodRef != null;
 
-        return transporterRepository.search(schoolFilter, neighborhoodFilter).stream()
-                .sorted(comparatorFor(sort))
-                .map(TransporterSummaryResponse::from)
+        // Traz todos e ordena "próximos" (que atendem a referência) primeiro; os
+        // demais aparecem embaixo. Sem referência, ordena apenas por preço/avaliação.
+        Comparator<TransporterProfile> byMetric = comparatorFor(sort, dir);
+        Comparator<TransporterProfile> comparator = hasRef
+                ? Comparator.comparingInt(
+                        (TransporterProfile t) -> servesRef(t, schoolRef, neighborhoodRef) ? 0 : 1)
+                        .thenComparing(byMetric)
+                : byMetric;
+
+        return transporterRepository.search(null, null).stream()
+                .sorted(comparator)
+                .map(t -> TransporterSummaryResponse.from(t, servesRef(t, schoolRef, neighborhoodRef)))
                 .toList();
+    }
+
+    /** true se o transportador atende a escola OU o bairro de referência (contains, sem acento-sensível). */
+    private boolean servesRef(TransporterProfile t, String school, String neighborhood) {
+        boolean schoolMatch = school != null && t.getSchools().stream()
+                .anyMatch(s -> s.toLowerCase().contains(school.toLowerCase()));
+        boolean neighborhoodMatch = neighborhood != null && t.getNeighborhoods().stream()
+                .anyMatch(n -> n.toLowerCase().contains(neighborhood.toLowerCase()));
+        return schoolMatch || neighborhoodMatch;
     }
 
     @Override
@@ -195,6 +214,14 @@ public class TransporterServiceImpl implements TransporterService {
 
     @Override
     @Transactional
+    public TransporterProfileResponse updateBio(Long userId, String bio) {
+        TransporterProfile transporter = findByUserOrThrow(userId);
+        transporter.setBio((bio == null || bio.isBlank()) ? null : bio.trim());
+        return profileResponse(transporterRepository.save(transporter));
+    }
+
+    @Override
+    @Transactional
     public TransporterProfileResponse setMyPhoto(Long userId, MultipartFile file) {
         TransporterProfile transporter = findByUserOrThrow(userId);
         String previous = transporter.getPhotoUrl();
@@ -296,11 +323,17 @@ public class TransporterServiceImpl implements TransporterService {
         return result;
     }
 
-    private Comparator<TransporterProfile> comparatorFor(String sort) {
-        if ("rating".equalsIgnoreCase(sort)) {
-            return Comparator.comparing(TransporterProfile::getRatingAvg).reversed();
-        }
-        return Comparator.comparing(TransporterProfile::getBaseMonthlyFee);
+    /**
+     * Ordena por preço ou avaliação. {@code dir="desc"} inverte: 1º clique (asc) traz
+     * mais baratos / pior avaliados; 2º clique (desc) traz mais caros / melhor avaliados.
+     */
+    private Comparator<TransporterProfile> comparatorFor(String sort, String dir) {
+        Comparator<TransporterProfile> base = "rating".equalsIgnoreCase(sort)
+                ? Comparator.comparing(TransporterProfile::getRatingAvg,
+                        Comparator.nullsLast(Comparator.naturalOrder()))
+                : Comparator.comparing(TransporterProfile::getBaseMonthlyFee,
+                        Comparator.nullsLast(Comparator.naturalOrder()));
+        return "desc".equalsIgnoreCase(dir) ? base.reversed() : base;
     }
 
     private TransporterProfile findOrThrow(Long id) {

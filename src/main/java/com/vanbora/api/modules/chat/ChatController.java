@@ -16,7 +16,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /** Endpoints de conversas e mensagens (compartilhados pelos dois perfis). */
 @RestController
@@ -55,6 +57,15 @@ public class ChatController {
                                                 @Valid @RequestBody SendMessageRequest request) {
         MessageResponse response =
                 chatService.sendMessage(currentUserProvider.requireUser(), id, request.text());
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /** Envia uma imagem na conversa. */
+    @PostMapping("/{id}/messages/image")
+    public ResponseEntity<MessageResponse> sendImage(@PathVariable Long id,
+                                                     @RequestParam("file") MultipartFile file) {
+        MessageResponse response =
+                chatService.sendImage(currentUserProvider.requireUser(), id, file);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

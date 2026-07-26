@@ -3,9 +3,11 @@ package com.vanbora.api.modules.finance.service;
 import com.vanbora.api.modules.finance.domain.DailyDistance;
 import com.vanbora.api.modules.finance.domain.Expense;
 import com.vanbora.api.modules.finance.domain.FuelEntry;
+import com.vanbora.api.modules.finance.domain.ManualRevenue;
 import com.vanbora.api.modules.finance.dto.CreateExpenseRequest;
 import com.vanbora.api.modules.finance.dto.CreateFuelRequest;
 import com.vanbora.api.modules.finance.dto.ExpenseResponse;
+import com.vanbora.api.modules.finance.dto.FinanceBreakdownItem;
 import com.vanbora.api.modules.finance.dto.FinanceReportResponse;
 import com.vanbora.api.modules.finance.dto.FinanceReportResponse.ReportLine;
 import com.vanbora.api.modules.finance.dto.FinanceSettingsRequest;
@@ -16,10 +18,12 @@ import com.vanbora.api.modules.finance.dto.FinanceSummaryResponse.Goal;
 import com.vanbora.api.modules.finance.dto.FinanceSummaryResponse.Maintenance;
 import com.vanbora.api.modules.finance.dto.FinanceSummaryResponse.MonthlyRevenue;
 import com.vanbora.api.modules.finance.dto.FuelEntryResponse;
+import com.vanbora.api.modules.finance.dto.SetRevenueRequest;
 import com.vanbora.api.modules.finance.dto.SuggestionResponse;
 import com.vanbora.api.modules.finance.repository.DailyDistanceRepository;
 import com.vanbora.api.modules.finance.repository.ExpenseRepository;
 import com.vanbora.api.modules.finance.repository.FuelEntryRepository;
+import com.vanbora.api.modules.finance.repository.ManualRevenueRepository;
 import com.vanbora.api.modules.payment.domain.Payment;
 import com.vanbora.api.modules.payment.repository.PaymentRepository;
 import com.vanbora.api.modules.transporter.domain.TransporterProfile;
@@ -30,6 +34,7 @@ import com.vanbora.api.shared.exception.ResourceNotFoundException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.Year;
 import java.time.YearMonth;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
@@ -48,7 +53,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class FinanceServiceImpl implements FinanceService {
 
     private static final Locale PT_BR = Locale.forLanguageTag("pt-BR");
-    private static final int MONTHS_IN_CHART = 5;
     private static final String FUEL_CATEGORY = "Combustível";
     // Defaults para sugestões (parametrizáveis no futuro).
     private static final double DEFAULT_KM_PER_LITER = 8.0;
@@ -59,17 +63,20 @@ public class FinanceServiceImpl implements FinanceService {
     private final ExpenseRepository expenseRepository;
     private final FuelEntryRepository fuelRepository;
     private final DailyDistanceRepository distanceRepository;
+    private final ManualRevenueRepository manualRevenueRepository;
 
     public FinanceServiceImpl(PaymentRepository paymentRepository,
                               TransporterProfileRepository transporterRepository,
                               ExpenseRepository expenseRepository,
                               FuelEntryRepository fuelRepository,
-                              DailyDistanceRepository distanceRepository) {
+                              DailyDistanceRepository distanceRepository,
+                              ManualRevenueRepository manualRevenueRepository) {
         this.paymentRepository = paymentRepository;
         this.transporterRepository = transporterRepository;
         this.expenseRepository = expenseRepository;
         this.fuelRepository = fuelRepository;
         this.distanceRepository = distanceRepository;
+        this.manualRevenueRepository = manualRevenueRepository;
     }
 
     @Override
@@ -101,7 +108,7 @@ public class FinanceServiceImpl implements FinanceService {
                 consumption(fuel, kmPeriod),
                 goal(t, payments),
                 maintenance(t, kmTotal),
-                monthlyRevenue(payments));
+                monthlyRevenue(payments, manualRevenueRepository.findByTransporterId(id)));
     }
 
     @Override
@@ -315,15 +322,71 @@ public class FinanceServiceImpl implements FinanceService {
         return new Maintenance(interval, round1(since), round1(interval - since));
     }
 
-    private List<MonthlyRevenue> monthlyRevenue(List<Payment> payments) {
-        Map<String, BigDecimal> byMonth = payments.stream()
+    /**
+     * Receita por mês do ANO ATUAL (Jan–Dez), somando as mensalidades pagas e os
+     * lançamentos manuais (backfill). Meses sem dado aparecem como zero.
+     */
+    private List<MonthlyRevenue> monthlyRevenue(List<Payment> payments, List<ManualRevenue> manual) {
+        Map<String, BigDecimal> paidByMonth = payments.stream()
                 .filter(p -> p.getStatus() == PaymentStatus.PAID)
                 .collect(Collectors.groupingBy(Payment::getReferenceMonth, TreeMap::new,
                         Collectors.reducing(BigDecimal.ZERO, Payment::getAmount, BigDecimal::add)));
-        return byMonth.entrySet().stream()
-                .skip(Math.max(0, byMonth.size() - MONTHS_IN_CHART))
-                .map(e -> new MonthlyRevenue(monthLabel(e.getKey()), e.getValue()))
+        Map<String, BigDecimal> manualByMonth = manual.stream()
+                .collect(Collectors.toMap(ManualRevenue::getReferenceMonth, ManualRevenue::getAmount,
+                        BigDecimal::add));
+
+        int year = Year.now().getValue();
+        List<MonthlyRevenue> result = new ArrayList<>();
+        for (int month = 1; month <= 12; month++) {
+            String key = YearMonth.of(year, month).toString(); // yyyy-MM
+            BigDecimal value = paidByMonth.getOrDefault(key, BigDecimal.ZERO)
+                    .add(manualByMonth.getOrDefault(key, BigDecimal.ZERO));
+            result.add(new MonthlyRevenue(monthLabel(key), value));
+        }
+        return result;
+    }
+
+    @Override
+    public List<FinanceBreakdownItem> getBreakdown(Long userId, String type) {
+        Long id = resolve(userId).getId();
+        List<Payment> payments = paymentRepository.findByEnrollmentTransporterId(id);
+        String t = type == null ? "received" : type.toLowerCase();
+
+        return payments.stream()
+                .filter(p -> matchesBreakdown(p, t))
+                .sorted((a, b) -> b.getReferenceMonth().compareTo(a.getReferenceMonth()))
+                .map(p -> new FinanceBreakdownItem(
+                        p.getEnrollment().getDependent().getName(),
+                        p.getReferenceMonth(),
+                        p.getAmount(),
+                        p.getStatus() == PaymentStatus.PAID ? p.getPaidAt() : p.getDueDate(),
+                        p.getStatus().name()))
                 .toList();
+    }
+
+    private boolean matchesBreakdown(Payment p, String type) {
+        return switch (type) {
+            case "pending" -> p.getStatus() == PaymentStatus.PENDING;
+            case "overdue" -> p.getStatus() == PaymentStatus.OVERDUE;
+            default -> p.getStatus() == PaymentStatus.PAID
+                    && inRange(p.getPaidAt(), YearMonth.now().atDay(1), LocalDate.now());
+        };
+    }
+
+    @Override
+    @Transactional
+    public void setManualRevenue(Long userId, SetRevenueRequest request) {
+        TransporterProfile t = resolve(userId);
+        ManualRevenue entry = manualRevenueRepository
+                .findByTransporterIdAndReferenceMonth(t.getId(), request.referenceMonth())
+                .orElseGet(() -> {
+                    ManualRevenue created = new ManualRevenue();
+                    created.setTransporter(t);
+                    created.setReferenceMonth(request.referenceMonth());
+                    return created;
+                });
+        entry.setAmount(request.amount());
+        manualRevenueRepository.save(entry);
     }
 
     private BigDecimal receivedBetween(List<Payment> payments, LocalDate start, LocalDate end) {

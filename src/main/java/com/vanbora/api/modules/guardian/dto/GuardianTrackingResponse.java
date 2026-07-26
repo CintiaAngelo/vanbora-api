@@ -24,11 +24,20 @@ public record GuardianTrackingResponse(
         /** Total de embarques marcados para hoje. */
         Integer totalStops,
         /** Indica se o dependente está marcado para ir hoje. */
-        boolean goingToday
+        boolean goingToday,
+        /** Minutos previstos até o embarque do dependente (null se indisponível). */
+        Integer etaToStudentMinutes,
+        /** Horário previsto do embarque do dependente ("HH:mm"). */
+        String etaToStudentClock,
+        /** Minutos previstos até a chegada na escola. */
+        Integer etaToSchoolMinutes,
+        /** Horário previsto de chegada na escola ("HH:mm"). */
+        String etaToSchoolClock
 ) {
     /** Resposta vazia quando o responsável ainda não tem transportador ativo. */
     public static GuardianTrackingResponse none() {
         return new GuardianTrackingResponse(
-                false, null, null, null, null, null, null, null, null, null, false);
+                false, null, null, null, null, null, null, null, null, null, false,
+                null, null, null, null);
     }
 }

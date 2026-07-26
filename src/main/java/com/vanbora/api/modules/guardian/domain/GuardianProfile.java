@@ -12,6 +12,8 @@ import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.util.ArrayList;
 import java.util.List;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -29,6 +31,15 @@ public class GuardianProfile extends BaseEntity {
     private User user;
 
     private String cpf;
+
+    /** Foto de perfil do responsável (nullable). */
+    @Column(name = "photo_url", length = 512)
+    private String photoUrl;
+
+    /** Descrição/biografia livre do responsável. LONGVARCHAR ⇒ TEXT no MySQL. */
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
+    @Column(name = "bio")
+    private String bio;
 
     // ----- Endereço de embarque (buscar a criança) -----
     private String cep;

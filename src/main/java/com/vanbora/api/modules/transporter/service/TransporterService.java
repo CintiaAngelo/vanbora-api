@@ -16,7 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 /** Casos de uso relacionados ao transportador (busca pública e perfil próprio). */
 public interface TransporterService {
 
-    List<TransporterSummaryResponse> search(String school, String neighborhood, String sort);
+    List<TransporterSummaryResponse> search(String school, String neighborhood, String sort, String dir);
 
     /** Escolas e bairros já cadastrados (para os autocompletes da busca), em ordem alfabética. */
     ServiceAreaOptionsResponse getServiceAreaOptions();
@@ -35,6 +35,9 @@ public interface TransporterService {
 
     /** Define/limpa o modelo de contrato (texto) usado na assinatura do responsável. */
     TransporterProfileResponse updateContractTemplate(Long userId, String template);
+
+    /** Atualiza a descrição/biografia do transportador. */
+    TransporterProfileResponse updateBio(Long userId, String bio);
 
     TransporterProfileResponse setMyPhoto(Long userId, MultipartFile file);
 

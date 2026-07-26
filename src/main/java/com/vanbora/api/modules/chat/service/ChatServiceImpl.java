@@ -12,9 +12,11 @@ import com.vanbora.api.modules.guardian.repository.GuardianProfileRepository;
 import com.vanbora.api.modules.transporter.domain.TransporterProfile;
 import com.vanbora.api.modules.transporter.repository.TransporterProfileRepository;
 import com.vanbora.api.modules.user.domain.User;
+import com.vanbora.api.shared.enums.MessageType;
 import com.vanbora.api.shared.enums.UserRole;
 import com.vanbora.api.shared.exception.BusinessException;
 import com.vanbora.api.shared.exception.ResourceNotFoundException;
+import com.vanbora.api.shared.storage.StorageService;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -22,6 +24,7 @@ import java.util.List;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 /** Implementação da mensageria, com a perspectiva ("fromMe") do usuário autenticado. */
 @Service
@@ -35,17 +38,20 @@ public class ChatServiceImpl implements ChatService {
     private final SimpMessagingTemplate messagingTemplate;
     private final GuardianProfileRepository guardianRepository;
     private final TransporterProfileRepository transporterRepository;
+    private final StorageService storageService;
 
     public ChatServiceImpl(ConversationRepository conversationRepository,
                            MessageRepository messageRepository,
                            SimpMessagingTemplate messagingTemplate,
                            GuardianProfileRepository guardianRepository,
-                           TransporterProfileRepository transporterRepository) {
+                           TransporterProfileRepository transporterRepository,
+                           StorageService storageService) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.messagingTemplate = messagingTemplate;
         this.guardianRepository = guardianRepository;
         this.transporterRepository = transporterRepository;
+        this.storageService = storageService;
     }
 
     @Override
@@ -107,10 +113,32 @@ public class ChatServiceImpl implements ChatService {
         message.setConversation(conversation);
         message.setSender(currentUser);
         message.setText(text);
+        message.setType(MessageType.TEXT);
         message.setSentAt(Instant.now());
         Message saved = messageRepository.save(message);
+        broadcast(conversationId, saved, currentUser);
+        return toMessage(saved, currentUser);
+    }
 
-        // Push em tempo real para os participantes assinantes do tópico da conversa.
+    @Override
+    @Transactional
+    public MessageResponse sendImage(User currentUser, Long conversationId, MultipartFile file) {
+        Conversation conversation = requireParticipant(currentUser, conversationId);
+
+        Message message = new Message();
+        message.setConversation(conversation);
+        message.setSender(currentUser);
+        message.setText(""); // imagem não tem texto
+        message.setType(MessageType.IMAGE);
+        message.setMediaUrl(storageService.store(file, "chat"));
+        message.setSentAt(Instant.now());
+        Message saved = messageRepository.save(message);
+        broadcast(conversationId, saved, currentUser);
+        return toMessage(saved, currentUser);
+    }
+
+    /** Difunde a mensagem para os assinantes do tópico da conversa (tempo real). */
+    private void broadcast(Long conversationId, Message saved, User sender) {
         messagingTemplate.convertAndSend(
                 "/topic/conversations/" + conversationId,
                 new ChatBroadcast(
@@ -118,10 +146,10 @@ public class ChatServiceImpl implements ChatService {
                         saved.getId(),
                         saved.getText(),
                         TIME_FORMAT.format(saved.getSentAt()),
-                        currentUser.getId(),
-                        currentUser.getName()));
-
-        return toMessage(saved, currentUser);
+                        sender.getId(),
+                        sender.getName(),
+                        saved.typeOrDefault().name(),
+                        saved.getMediaUrl()));
     }
 
     private List<Conversation> conversationsOf(User user) {
@@ -152,13 +180,16 @@ public class ChatServiceImpl implements ChatService {
 
         List<Message> messages = conversation.getMessages();
         Message last = messages.isEmpty() ? null : messages.get(messages.size() - 1);
+        String lastText = last == null ? ""
+                : (last.typeOrDefault() == MessageType.IMAGE ? "📷 Foto" : last.getText());
 
         return new ConversationResponse(
                 conversation.getId(),
                 otherName,
-                last == null ? "" : last.getText(),
+                lastText,
                 last == null ? "" : TIME_FORMAT.format(last.getSentAt()),
-                countUnread(conversation, currentUser));
+                countUnread(conversation, currentUser),
+                conversation.getTransporter().getId());
     }
 
     /** Mensagens enviadas pelo OUTRO lado após a última leitura deste usuário. */
@@ -190,6 +221,8 @@ public class ChatServiceImpl implements ChatService {
                 message.getId(),
                 message.getText(),
                 TIME_FORMAT.format(message.getSentAt()),
-                message.getSender().getId().equals(currentUser.getId()));
+                message.getSender().getId().equals(currentUser.getId()),
+                message.typeOrDefault().name(),
+                message.getMediaUrl());
     }
 }

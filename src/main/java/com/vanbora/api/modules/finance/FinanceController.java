@@ -3,10 +3,12 @@ package com.vanbora.api.modules.finance;
 import com.vanbora.api.modules.finance.dto.CreateExpenseRequest;
 import com.vanbora.api.modules.finance.dto.CreateFuelRequest;
 import com.vanbora.api.modules.finance.dto.ExpenseResponse;
+import com.vanbora.api.modules.finance.dto.FinanceBreakdownItem;
 import com.vanbora.api.modules.finance.dto.FinanceReportResponse;
 import com.vanbora.api.modules.finance.dto.FinanceSettingsRequest;
 import com.vanbora.api.modules.finance.dto.FinanceSummaryResponse;
 import com.vanbora.api.modules.finance.dto.FuelEntryResponse;
+import com.vanbora.api.modules.finance.dto.SetRevenueRequest;
 import com.vanbora.api.modules.finance.dto.SuggestionResponse;
 import com.vanbora.api.modules.finance.service.FinanceService;
 import com.vanbora.api.security.CurrentUserProvider;
@@ -62,6 +64,19 @@ public class FinanceController {
     @GetMapping("/suggestions")
     public List<SuggestionResponse> suggestions() {
         return financeService.getSuggestions(userId());
+    }
+
+    /** Detalhamento por aluno: type = pending | overdue | received. */
+    @GetMapping("/breakdown")
+    public List<FinanceBreakdownItem> breakdown(@RequestParam(defaultValue = "received") String type) {
+        return financeService.getBreakdown(userId(), type);
+    }
+
+    /** Lança/atualiza a receita manual de um mês (backfill de meses anteriores). */
+    @PostMapping("/revenue")
+    public ResponseEntity<Void> setRevenue(@Valid @RequestBody SetRevenueRequest request) {
+        financeService.setManualRevenue(userId(), request);
+        return ResponseEntity.noContent().build();
     }
 
     // ----- Gastos -----

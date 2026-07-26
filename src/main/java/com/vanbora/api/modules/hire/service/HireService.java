@@ -1,6 +1,7 @@
 package com.vanbora.api.modules.hire.service;
 
 import com.vanbora.api.modules.hire.dto.CreateHireRequest;
+import com.vanbora.api.modules.hire.dto.GuardianForTransporterResponse;
 import com.vanbora.api.modules.hire.dto.HireRequestResponse;
 import java.util.List;
 
@@ -10,6 +11,9 @@ public interface HireService {
     HireRequestResponse requestHire(Long guardianUserId, CreateHireRequest request);
 
     List<HireRequestResponse> listPendingForTransporter(Long transporterUserId);
+
+    /** [Transportador] Perfil do responsável de uma solicitação que lhe pertence. */
+    GuardianForTransporterResponse getGuardianForRequest(Long transporterUserId, Long hireRequestId);
 
     void accept(Long transporterUserId, Long hireRequestId);
 

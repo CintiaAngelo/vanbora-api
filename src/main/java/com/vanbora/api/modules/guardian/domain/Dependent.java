@@ -35,6 +35,10 @@ public class Dependent extends BaseEntity {
     @JoinColumn(name = "school_id")
     private School schoolRef;
 
+    /** Foto do dependente (nullable). */
+    @Column(name = "photo_url", length = 512)
+    private String photoUrl;
+
     /** Excluído pelo responsável (soft-delete). NULLABLE p/ ddl-auto: null ⇒ ativo. */
     @Column
     private Boolean archived;

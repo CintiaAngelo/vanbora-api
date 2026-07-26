@@ -6,6 +6,8 @@ public record ConversationResponse(
         String name,
         String lastMessage,
         String time,
-        int unread
+        int unread,
+        /** Id do perfil do transportador da conversa (para abrir o perfil pelo chat). */
+        Long transporterId
 ) {
 }

@@ -38,8 +38,12 @@ import com.vanbora.api.shared.enums.ContractStatus;
 import com.vanbora.api.shared.enums.HireStatus;
 import com.vanbora.api.shared.enums.PaymentStatus;
 import com.vanbora.api.shared.enums.RouteStopStatus;
+import com.vanbora.api.shared.eta.EtaEstimator;
 import com.vanbora.api.shared.exception.BusinessException;
 import com.vanbora.api.shared.exception.ResourceNotFoundException;
+import com.vanbora.api.shared.storage.StorageService;
+import com.vanbora.api.shared.util.GeoUtils;
+import org.springframework.web.multipart.MultipartFile;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -81,6 +85,8 @@ public class GuardianServiceImpl implements GuardianService {
     private final HireRequestRepository hireRequestRepository;
     private final SchoolRepository schoolRepository;
     private final GuardianAddressService guardianAddressService;
+    private final StorageService storageService;
+    private final EtaEstimator etaEstimator;
 
     public GuardianServiceImpl(
             GuardianProfileRepository guardianRepository,
@@ -94,7 +100,9 @@ public class GuardianServiceImpl implements GuardianService {
             ContractRepository contractRepository,
             HireRequestRepository hireRequestRepository,
             SchoolRepository schoolRepository,
-            GuardianAddressService guardianAddressService) {
+            GuardianAddressService guardianAddressService,
+            StorageService storageService,
+            EtaEstimator etaEstimator) {
         this.guardianRepository = guardianRepository;
         this.dependentRepository = dependentRepository;
         this.enrollmentRepository = enrollmentRepository;
@@ -107,6 +115,8 @@ public class GuardianServiceImpl implements GuardianService {
         this.hireRequestRepository = hireRequestRepository;
         this.schoolRepository = schoolRepository;
         this.guardianAddressService = guardianAddressService;
+        this.storageService = storageService;
+        this.etaEstimator = etaEstimator;
     }
 
     @Override
@@ -124,6 +134,38 @@ public class GuardianServiceImpl implements GuardianService {
                 guardian, request.pickup(), request.deliverySameAsPickup(), request.delivery());
         guardianRepository.save(guardian);
         return GuardianProfileResponse.from(guardian, mapDependents(guardian.getId()));
+    }
+
+    @Override
+    @Transactional
+    public GuardianProfileResponse updateBio(Long userId, String bio) {
+        GuardianProfile guardian = resolve(userId);
+        guardian.setBio((bio == null || bio.isBlank()) ? null : bio.trim());
+        guardianRepository.save(guardian);
+        return GuardianProfileResponse.from(guardian, mapDependents(guardian.getId()));
+    }
+
+    @Override
+    @Transactional
+    public GuardianProfileResponse setMyPhoto(Long userId, MultipartFile file) {
+        GuardianProfile guardian = resolve(userId);
+        String previous = guardian.getPhotoUrl();
+        guardian.setPhotoUrl(storageService.store(file, "guardians"));
+        guardianRepository.save(guardian);
+        storageService.delete(previous);
+        return GuardianProfileResponse.from(guardian, mapDependents(guardian.getId()));
+    }
+
+    @Override
+    @Transactional
+    public DependentResponse setDependentPhoto(Long userId, Long dependentId, MultipartFile file) {
+        GuardianProfile guardian = resolve(userId);
+        Dependent dependent = resolveDependent(guardian, dependentId);
+        String previous = dependent.getPhotoUrl();
+        dependent.setPhotoUrl(storageService.store(file, "dependents"));
+        dependentRepository.save(dependent);
+        storageService.delete(previous);
+        return DependentResponse.from(dependent);
     }
 
     @Override
@@ -453,6 +495,39 @@ public class GuardianServiceImpl implements GuardianService {
         }
         Integer totalStops = activePickups.isEmpty() ? null : activePickups.size();
 
+        // ETA a partir da posição atual do transportador, seguindo a ordem da rota
+        // pelos embarques de hoje até o embarque do dependente e, então, até a escola.
+        Integer etaStudentMin = null;
+        String etaStudentClock = null;
+        Integer etaSchoolMin = null;
+        String etaSchoolClock = null;
+        Double curLat = transporter.getCurrentLatitude();
+        Double curLon = transporter.getCurrentLongitude();
+        if (curLat != null && curLon != null) {
+            double cumulative = 0.0;
+            double prevLat = curLat;
+            double prevLon = curLon;
+            for (RouteStop stop : activePickups) {
+                if (stop.getLatitude() == null || stop.getLongitude() == null) {
+                    continue;
+                }
+                cumulative += etaEstimator.roadKm(
+                        GeoUtils.haversineKm(prevLat, prevLon, stop.getLatitude(), stop.getLongitude()));
+                prevLat = stop.getLatitude();
+                prevLon = stop.getLongitude();
+                if (myStop != null && stop.getId().equals(myStop.getId())) {
+                    etaStudentMin = etaEstimator.minutes(cumulative);
+                    etaStudentClock = etaEstimator.clockFromNow(etaStudentMin);
+                }
+            }
+            if (schoolStop != null && schoolStop.getLatitude() != null && schoolStop.getLongitude() != null) {
+                cumulative += etaEstimator.roadKm(GeoUtils.haversineKm(
+                        prevLat, prevLon, schoolStop.getLatitude(), schoolStop.getLongitude()));
+                etaSchoolMin = etaEstimator.minutes(cumulative);
+                etaSchoolClock = etaEstimator.clockFromNow(etaSchoolMin);
+            }
+        }
+
         return new GuardianTrackingResponse(
                 true,
                 transporter.getUser().getName(),
@@ -464,7 +539,11 @@ public class GuardianServiceImpl implements GuardianService {
                 schoolStop != null ? RouteStopResponse.from(schoolStop) : null,
                 myOrder,
                 totalStops,
-                goingToday);
+                goingToday,
+                etaStudentMin,
+                etaStudentClock,
+                etaSchoolMin,
+                etaSchoolClock);
     }
 
     private static final int UPCOMING_SCHOOL_DAYS = 10;

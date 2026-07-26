@@ -7,9 +7,8 @@ import com.vanbora.api.modules.transporter.domain.TransporterProfile;
 import com.vanbora.api.modules.transporter.repository.TransporterProfileRepository;
 import com.vanbora.api.shared.enums.RouteStopStatus;
 import com.vanbora.api.shared.exception.ResourceNotFoundException;
+import com.vanbora.api.shared.eta.EtaEstimator;
 import com.vanbora.api.shared.util.GeoUtils;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -19,19 +18,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class RouteServiceImpl implements RouteService {
 
-    // Estimativas de trajeto: fator de rua (distância real ≈ 1,3× a linha reta) e
-    // velocidade média de van escolar urbana (com paradas). Valores aproximados.
-    private static final double ROAD_FACTOR = 1.3;
-    private static final double AVG_SPEED_KMH = 24.0;
-    private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
-
     private final RouteStopRepository routeStopRepository;
     private final TransporterProfileRepository transporterRepository;
+    private final EtaEstimator etaEstimator;
 
     public RouteServiceImpl(RouteStopRepository routeStopRepository,
-                            TransporterProfileRepository transporterRepository) {
+                            TransporterProfileRepository transporterRepository,
+                            EtaEstimator etaEstimator) {
         this.routeStopRepository = routeStopRepository;
         this.transporterRepository = transporterRepository;
+        this.etaEstimator = etaEstimator;
     }
 
     @Override
@@ -84,7 +80,6 @@ public class RouteServiceImpl implements RouteService {
         Double prevLat = startLat;
         Double prevLon = startLon;
         double cumulative = 0.0;
-        LocalTime now = LocalTime.now();
 
         for (RouteStop stop : ordered) {
             Double leg = null;
@@ -96,14 +91,14 @@ public class RouteServiceImpl implements RouteService {
                 if (prevLat != null && prevLon != null) {
                     double straight = GeoUtils.haversineKm(
                             prevLat, prevLon, stop.getLatitude(), stop.getLongitude());
-                    leg = round1(straight * ROAD_FACTOR);
+                    leg = round1(etaEstimator.roadKm(straight));
                     cumulative += leg;
                 } else {
                     leg = 0.0;
                 }
                 cumOut = round1(cumulative);
-                etaMin = (int) Math.round(cumulative / AVG_SPEED_KMH * 60.0);
-                etaClock = now.plusMinutes(etaMin).format(HH_MM);
+                etaMin = etaEstimator.minutes(cumulative);
+                etaClock = etaEstimator.clockFromNow(etaMin);
                 prevLat = stop.getLatitude();
                 prevLon = stop.getLongitude();
             }

@@ -8,6 +8,7 @@ import com.vanbora.api.modules.guardian.repository.GuardianProfileRepository;
 import com.vanbora.api.modules.hire.domain.Contract;
 import com.vanbora.api.modules.hire.domain.HireRequest;
 import com.vanbora.api.modules.hire.dto.CreateHireRequest;
+import com.vanbora.api.modules.hire.dto.GuardianForTransporterResponse;
 import com.vanbora.api.modules.hire.dto.HireRequestResponse;
 import com.vanbora.api.modules.hire.repository.ContractRepository;
 import com.vanbora.api.modules.hire.repository.HireRequestRepository;
@@ -140,6 +141,21 @@ public class HireServiceImpl implements HireService {
                 .filter(h -> !h.isOverdue())
                 .map(HireRequestResponse::from)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public GuardianForTransporterResponse getGuardianForRequest(Long transporterUserId, Long hireRequestId) {
+        TransporterProfile transporter = resolveTransporter(transporterUserId);
+        HireRequest hire = hireRequestRepository.findById(hireRequestId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Solicitação", hireRequestId));
+        if (!hire.getTransporter().getId().equals(transporter.getId())) {
+            throw new BusinessException("Esta solicitação não pertence ao transportador autenticado.");
+        }
+        int dependentsCount = (int) hire.getGuardian().getDependents().stream()
+                .filter(d -> !d.isArchived())
+                .count();
+        return GuardianForTransporterResponse.from(hire, dependentsCount);
     }
 
     @Override

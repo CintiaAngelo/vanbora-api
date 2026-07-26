@@ -3,10 +3,12 @@ package com.vanbora.api.modules.finance.service;
 import com.vanbora.api.modules.finance.dto.CreateExpenseRequest;
 import com.vanbora.api.modules.finance.dto.CreateFuelRequest;
 import com.vanbora.api.modules.finance.dto.ExpenseResponse;
+import com.vanbora.api.modules.finance.dto.FinanceBreakdownItem;
 import com.vanbora.api.modules.finance.dto.FinanceReportResponse;
 import com.vanbora.api.modules.finance.dto.FinanceSettingsRequest;
 import com.vanbora.api.modules.finance.dto.FinanceSummaryResponse;
 import com.vanbora.api.modules.finance.dto.FuelEntryResponse;
+import com.vanbora.api.modules.finance.dto.SetRevenueRequest;
 import com.vanbora.api.modules.finance.dto.SuggestionResponse;
 import java.time.LocalDate;
 import java.util.List;
@@ -19,6 +21,12 @@ public interface FinanceService {
     FinanceReportResponse getReport(Long transporterUserId, LocalDate from, LocalDate to);
 
     List<SuggestionResponse> getSuggestions(Long transporterUserId);
+
+    /** Detalhamento (pendente/vencido/recebido) por aluno, para os tiles clicáveis. */
+    List<FinanceBreakdownItem> getBreakdown(Long transporterUserId, String type);
+
+    /** Lança/atualiza a receita manual de um mês (backfill). */
+    void setManualRevenue(Long transporterUserId, SetRevenueRequest request);
 
     // Gastos
     List<ExpenseResponse> listExpenses(Long transporterUserId, LocalDate from, LocalDate to);
