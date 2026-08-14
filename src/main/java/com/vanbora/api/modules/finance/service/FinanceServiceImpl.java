@@ -17,7 +17,11 @@ import com.vanbora.api.modules.finance.dto.FinanceSummaryResponse.Consumption;
 import com.vanbora.api.modules.finance.dto.FinanceSummaryResponse.Goal;
 import com.vanbora.api.modules.finance.dto.FinanceSummaryResponse.Maintenance;
 import com.vanbora.api.modules.finance.dto.FinanceSummaryResponse.MonthlyRevenue;
+import com.vanbora.api.modules.finance.dto.FinanceSummaryResponse.PeriodComparison;
 import com.vanbora.api.modules.finance.dto.FuelEntryResponse;
+import com.vanbora.api.modules.enrollment.domain.Enrollment;
+import com.vanbora.api.modules.enrollment.repository.EnrollmentRepository;
+import com.vanbora.api.modules.finance.dto.PaymentContactResponse;
 import com.vanbora.api.modules.finance.dto.SetRevenueRequest;
 import com.vanbora.api.modules.finance.dto.SuggestionResponse;
 import com.vanbora.api.modules.finance.repository.DailyDistanceRepository;
@@ -37,6 +41,7 @@ import java.time.LocalDate;
 import java.time.Year;
 import java.time.YearMonth;
 import java.time.format.TextStyle;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -64,19 +69,22 @@ public class FinanceServiceImpl implements FinanceService {
     private final FuelEntryRepository fuelRepository;
     private final DailyDistanceRepository distanceRepository;
     private final ManualRevenueRepository manualRevenueRepository;
+    private final EnrollmentRepository enrollmentRepository;
 
     public FinanceServiceImpl(PaymentRepository paymentRepository,
                               TransporterProfileRepository transporterRepository,
                               ExpenseRepository expenseRepository,
                               FuelEntryRepository fuelRepository,
                               DailyDistanceRepository distanceRepository,
-                              ManualRevenueRepository manualRevenueRepository) {
+                              ManualRevenueRepository manualRevenueRepository,
+                              EnrollmentRepository enrollmentRepository) {
         this.paymentRepository = paymentRepository;
         this.transporterRepository = transporterRepository;
         this.expenseRepository = expenseRepository;
         this.fuelRepository = fuelRepository;
         this.distanceRepository = distanceRepository;
         this.manualRevenueRepository = manualRevenueRepository;
+        this.enrollmentRepository = enrollmentRepository;
     }
 
     @Override
@@ -88,8 +96,9 @@ public class FinanceServiceImpl implements FinanceService {
 
         List<Payment> payments = paymentRepository.findByEnrollmentTransporterId(id);
         BigDecimal received = receivedBetween(payments, start, end);
-        BigDecimal pending = sumWhere(payments, p -> p.getStatus() == PaymentStatus.PENDING);
-        BigDecimal overdue = sumWhere(payments, p -> p.getStatus() == PaymentStatus.OVERDUE);
+        // Baseado no dueDate efetivo (não no status salvo, que nunca vira OVERDUE sozinho).
+        BigDecimal pending = sumByEffectiveStatus(payments, false);
+        BigDecimal overdue = sumByEffectiveStatus(payments, true);
 
         List<Expense> expenses = expenseRepository.findByTransporterIdAndDateBetweenOrderByDateDesc(id, start, end);
         List<FuelEntry> fuel = fuelRepository.findByTransporterIdAndDateBetweenOrderByDateDesc(id, start, end);
@@ -101,6 +110,10 @@ public class FinanceServiceImpl implements FinanceService {
                 .map(DailyDistance::getKm).orElse(0.0);
         double kmTotal = distanceRepository.totalKm(id);
 
+        BigDecimal recurringMonthlyRevenue = enrollmentRepository.findByTransporterIdAndActiveTrue(id).stream()
+                .map(Enrollment::getMonthlyFee)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         return new FinanceSummaryResponse(
                 received, pending, overdue, expensesTotal, balance,
                 round1(kmToday), round1(kmPeriod), round1(kmTotal),
@@ -108,7 +121,25 @@ public class FinanceServiceImpl implements FinanceService {
                 consumption(fuel, kmPeriod),
                 goal(t, payments),
                 maintenance(t, kmTotal),
-                monthlyRevenue(payments, manualRevenueRepository.findByTransporterId(id)));
+                monthlyRevenue(payments, manualRevenueRepository.findByTransporterId(id)),
+                previousPeriodComparison(id, payments, start, end, received, expensesTotal, kmPeriod),
+                recurringMonthlyRevenue);
+    }
+
+    @Override
+    public List<PaymentContactResponse> listOverduePayments(Long userId) {
+        Long id = resolve(userId).getId();
+        return paymentRepository.findOverdueByTransporterId(id, LocalDate.now()).stream()
+                .map(PaymentContactResponse::from)
+                .toList();
+    }
+
+    @Override
+    public List<PaymentContactResponse> listPendingPayments(Long userId) {
+        Long id = resolve(userId).getId();
+        return paymentRepository.findPendingByTransporterId(id, LocalDate.now()).stream()
+                .map(PaymentContactResponse::from)
+                .toList();
     }
 
     @Override
@@ -400,8 +431,50 @@ public class FinanceServiceImpl implements FinanceService {
         return date != null && !date.isBefore(start) && !date.isAfter(end);
     }
 
-    private BigDecimal sumWhere(List<Payment> payments, java.util.function.Predicate<Payment> filter) {
-        return payments.stream().filter(filter).map(Payment::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    /**
+     * Soma pagamentos não pagos pelo status EFETIVO (dueDate vs hoje), não pelo campo status
+     * salvo — nada no sistema promove PENDING para OVERDUE automaticamente quando o
+     * vencimento passa, então confiar só no status subcontava o "Vencido".
+     */
+    private BigDecimal sumByEffectiveStatus(List<Payment> payments, boolean wantOverdue) {
+        LocalDate today = LocalDate.now();
+        return payments.stream()
+                .filter(p -> p.getStatus() != PaymentStatus.PAID)
+                .filter(p -> {
+                    boolean isOverdue = p.getDueDate() != null && p.getDueDate().isBefore(today);
+                    return wantOverdue == isOverdue;
+                })
+                .map(Payment::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /** Comparação com o período imediatamente anterior, do mesmo tamanho. */
+    private PeriodComparison previousPeriodComparison(Long transporterId, List<Payment> payments,
+            LocalDate start, LocalDate end, BigDecimal received, BigDecimal expensesTotal, double kmPeriod) {
+        long days = ChronoUnit.DAYS.between(start, end) + 1;
+        LocalDate prevEnd = start.minusDays(1);
+        LocalDate prevStart = prevEnd.minusDays(days - 1);
+
+        BigDecimal prevReceived = receivedBetween(payments, prevStart, prevEnd);
+        List<Expense> prevExpenses = expenseRepository
+                .findByTransporterIdAndDateBetweenOrderByDateDesc(transporterId, prevStart, prevEnd);
+        List<FuelEntry> prevFuel = fuelRepository
+                .findByTransporterIdAndDateBetweenOrderByDateDesc(transporterId, prevStart, prevEnd);
+        BigDecimal prevExpensesTotal = sumExpenses(prevExpenses).add(sumFuel(prevFuel));
+        double prevKm = sumKm(distanceRepository.findByTransporterIdAndDateBetween(transporterId, prevStart, prevEnd));
+
+        return new PeriodComparison(
+                prevReceived, pctChange(prevReceived.doubleValue(), received.doubleValue()),
+                prevExpensesTotal, pctChange(prevExpensesTotal.doubleValue(), expensesTotal.doubleValue()),
+                round1(prevKm), pctChange(prevKm, kmPeriod));
+    }
+
+    /** Variação percentual; null quando o valor anterior é zero (evita divisão por zero). */
+    private Double pctChange(double previous, double current) {
+        if (previous == 0) {
+            return null;
+        }
+        return round1((current - previous) / previous * 100.0);
     }
 
     private BigDecimal sumExpenses(List<Expense> expenses) {

@@ -6,7 +6,7 @@ import com.vanbora.api.shared.enums.PlanType;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-/** Contrato exibido ao responsável (resumo dos termos + estado + planos). */
+/** Contrato exibido ao responsável ou ao transportador (resumo dos termos + estado + planos). */
 public record ContractResponse(
         Long id,
         ContractStatus status,
@@ -15,6 +15,7 @@ public record ContractResponse(
         Long dependentId,
         String studentName,
         String school,
+        String guardianName,
         BigDecimal monthlyFee,
         BigDecimal annualPlanFee,
         BigDecimal installmentMonthlyFee,
@@ -23,6 +24,8 @@ public record ContractResponse(
         BigDecimal cancellationFine,
         BigDecimal refundAmount,
         Instant signedAt,
+        /** Momento do cancelamento (só preenchido quando status == CANCELLED). Não há campo dedicado — usa updatedAt. */
+        Instant cancelledAt,
         String contractText
 ) {
     public static ContractResponse from(Contract contract) {
@@ -34,6 +37,7 @@ public record ContractResponse(
                 contract.getDependent().getId(),
                 contract.getDependent().getName(),
                 contract.getDependent().getSchool(),
+                contract.getGuardian().getUser().getName(),
                 contract.getMonthlyFee(),
                 contract.getAnnualPlanFee(),
                 contract.getInstallmentMonthlyFee(),
@@ -42,6 +46,7 @@ public record ContractResponse(
                 contract.getCancellationFine(),
                 contract.getRefundAmount(),
                 contract.getSignedAt(),
+                contract.getStatus() == ContractStatus.CANCELLED ? contract.getUpdatedAt() : null,
                 contract.getContractText());
     }
 }

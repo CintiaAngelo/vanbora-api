@@ -27,4 +27,8 @@ public interface ContractRepository extends JpaRepository<Contract, Long> {
 
     /** Quantidade de contratos num status para o transportador (ex.: cancelados = churn). */
     long countByTransporterIdAndStatus(Long transporterId, ContractStatus status);
+
+    List<Contract> findByTransporterIdOrderByIdDesc(Long transporterId);
+
+    List<Contract> findByTransporterIdAndStatusOrderByIdDesc(Long transporterId, ContractStatus status);
 }

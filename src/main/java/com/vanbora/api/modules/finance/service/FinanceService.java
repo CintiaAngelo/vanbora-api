@@ -8,6 +8,7 @@ import com.vanbora.api.modules.finance.dto.FinanceReportResponse;
 import com.vanbora.api.modules.finance.dto.FinanceSettingsRequest;
 import com.vanbora.api.modules.finance.dto.FinanceSummaryResponse;
 import com.vanbora.api.modules.finance.dto.FuelEntryResponse;
+import com.vanbora.api.modules.finance.dto.PaymentContactResponse;
 import com.vanbora.api.modules.finance.dto.SetRevenueRequest;
 import com.vanbora.api.modules.finance.dto.SuggestionResponse;
 import java.time.LocalDate;
@@ -27,6 +28,12 @@ public interface FinanceService {
 
     /** Lança/atualiza a receita manual de um mês (backfill). */
     void setManualRevenue(Long transporterUserId, SetRevenueRequest request);
+
+    /** Pagamentos vencidos do transportador, com dados do aluno/responsável para cobrança. */
+    List<PaymentContactResponse> listOverduePayments(Long transporterUserId);
+
+    /** Pagamentos ainda dentro do prazo do transportador, com dados do aluno/responsável. */
+    List<PaymentContactResponse> listPendingPayments(Long transporterUserId);
 
     // Gastos
     List<ExpenseResponse> listExpenses(Long transporterUserId, LocalDate from, LocalDate to);

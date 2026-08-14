@@ -17,7 +17,10 @@ public record FinanceSummaryResponse(
         Consumption consumption,
         Goal goal,
         Maintenance maintenance,
-        List<MonthlyRevenue> monthlyRevenue
+        List<MonthlyRevenue> monthlyRevenue,
+        PeriodComparison comparison,
+        /** Soma de monthlyFee das matrículas ativas — quanto entra por mês se nada mudar. */
+        BigDecimal recurringMonthlyRevenue
 ) {
     /** Total gasto em uma categoria. */
     public record CategoryTotal(String category, BigDecimal total) {}
@@ -33,4 +36,14 @@ public record FinanceSummaryResponse(
 
     /** Receita recebida em um mês (rótulo curto + valor). */
     public record MonthlyRevenue(String label, BigDecimal value) {}
+
+    /**
+     * Comparação com o período imediatamente anterior (mesmo tamanho). *ChangePct é null
+     * quando o valor anterior é zero (evita divisão por zero / "+infinito%").
+     */
+    public record PeriodComparison(
+            BigDecimal previousReceived, Double receivedChangePct,
+            BigDecimal previousExpenses, Double expensesChangePct,
+            double previousKm, Double kmChangePct
+    ) {}
 }

@@ -11,6 +11,9 @@ public interface ContractService {
 
     List<ContractResponse> listForGuardian(Long userId, ContractStatus status);
 
+    /** Contratos do transportador autenticado (ex.: histórico de cancelados). */
+    List<ContractResponse> listForTransporter(Long userId, ContractStatus status);
+
     ContractResponse get(Long userId, Long contractId);
 
     /**

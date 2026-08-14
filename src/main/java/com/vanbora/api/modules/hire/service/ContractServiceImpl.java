@@ -18,6 +18,7 @@ import com.vanbora.api.modules.payment.gateway.PaymentGateway.ChargeResult;
 import com.vanbora.api.modules.payment.repository.PaymentMethodRepository;
 import com.vanbora.api.modules.route.service.RouteProvisioningService;
 import com.vanbora.api.modules.transporter.domain.TransporterProfile;
+import com.vanbora.api.modules.transporter.repository.TransporterProfileRepository;
 import com.vanbora.api.modules.transporter.service.ReviewService;
 import com.vanbora.api.shared.enums.ContractStatus;
 import com.vanbora.api.shared.enums.FinanceStatus;
@@ -45,6 +46,7 @@ public class ContractServiceImpl implements ContractService {
     private final PaymentMethodRepository paymentMethodRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final GuardianProfileRepository guardianRepository;
+    private final TransporterProfileRepository transporterRepository;
     private final PaymentGateway paymentGateway;
     private final RouteProvisioningService routeProvisioningService;
     private final ReviewService reviewService;
@@ -57,6 +59,7 @@ public class ContractServiceImpl implements ContractService {
                                PaymentMethodRepository paymentMethodRepository,
                                EnrollmentRepository enrollmentRepository,
                                GuardianProfileRepository guardianRepository,
+                               TransporterProfileRepository transporterRepository,
                                PaymentGateway paymentGateway,
                                RouteProvisioningService routeProvisioningService,
                                ReviewService reviewService,
@@ -68,6 +71,7 @@ public class ContractServiceImpl implements ContractService {
         this.paymentMethodRepository = paymentMethodRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.guardianRepository = guardianRepository;
+        this.transporterRepository = transporterRepository;
         this.paymentGateway = paymentGateway;
         this.routeProvisioningService = routeProvisioningService;
         this.reviewService = reviewService;
@@ -84,6 +88,16 @@ public class ContractServiceImpl implements ContractService {
         List<Contract> contracts = (status == null)
                 ? contractRepository.findByGuardianIdOrderByIdDesc(guardianId)
                 : contractRepository.findByGuardianIdAndStatusOrderByIdDesc(guardianId, status);
+        return contracts.stream().map(ContractResponse::from).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ContractResponse> listForTransporter(Long userId, ContractStatus status) {
+        Long transporterId = resolveTransporter(userId).getId();
+        List<Contract> contracts = (status == null)
+                ? contractRepository.findByTransporterIdOrderByIdDesc(transporterId)
+                : contractRepository.findByTransporterIdAndStatusOrderByIdDesc(transporterId, status);
         return contracts.stream().map(ContractResponse::from).toList();
     }
 
@@ -354,5 +368,10 @@ public class ContractServiceImpl implements ContractService {
             boolean fidelityActive,
             BigDecimal fine,
             BigDecimal refund) {
+    }
+
+    private TransporterProfile resolveTransporter(Long userId) {
+        return transporterRepository.findByUserId(userId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Perfil de transportador", userId));
     }
 }

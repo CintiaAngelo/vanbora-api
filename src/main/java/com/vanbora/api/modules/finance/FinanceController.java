@@ -8,6 +8,7 @@ import com.vanbora.api.modules.finance.dto.FinanceReportResponse;
 import com.vanbora.api.modules.finance.dto.FinanceSettingsRequest;
 import com.vanbora.api.modules.finance.dto.FinanceSummaryResponse;
 import com.vanbora.api.modules.finance.dto.FuelEntryResponse;
+import com.vanbora.api.modules.finance.dto.PaymentContactResponse;
 import com.vanbora.api.modules.finance.dto.SetRevenueRequest;
 import com.vanbora.api.modules.finance.dto.SuggestionResponse;
 import com.vanbora.api.modules.finance.service.FinanceService;
@@ -77,6 +78,18 @@ public class FinanceController {
     public ResponseEntity<Void> setRevenue(@Valid @RequestBody SetRevenueRequest request) {
         financeService.setManualRevenue(userId(), request);
         return ResponseEntity.noContent().build();
+    }
+
+    /** Pagamentos vencidos, com dados do aluno/responsável — lista por trás do card "Vencido". */
+    @GetMapping("/overdue")
+    public List<PaymentContactResponse> overdue() {
+        return financeService.listOverduePayments(userId());
+    }
+
+    /** Pagamentos dentro do prazo, com dados do aluno/responsável — lista por trás do card "Pendente". */
+    @GetMapping("/pending")
+    public List<PaymentContactResponse> pending() {
+        return financeService.listPendingPayments(userId());
     }
 
     // ----- Gastos -----
