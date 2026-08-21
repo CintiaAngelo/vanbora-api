@@ -32,4 +32,16 @@ public record RouteStopResponse(
                 stop.getPosition(), stop.getLatitude(), stop.getLongitude(),
                 legDistanceKm, cumulativeKm, etaMinutes, etaClock);
     }
+
+    /**
+     * Parada de um aluno que avisou falta hoje: status forçado para NOT_GOING (mesmo que a
+     * parada em si permaneça GOING no banco — a falta é só de hoje) e sem trecho/ETA, pois
+     * ela não faz parte do trajeto de hoje.
+     */
+    public static RouteStopResponse notGoingToday(RouteStop stop) {
+        return new RouteStopResponse(
+                stop.getId(), stop.getLabel(), stop.getAddress(), RouteStopStatus.NOT_GOING,
+                stop.getPosition(), stop.getLatitude(), stop.getLongitude(),
+                null, null, null, null);
+    }
 }

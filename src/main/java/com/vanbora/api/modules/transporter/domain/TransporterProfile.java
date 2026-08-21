@@ -80,6 +80,10 @@ public class TransporterProfile extends BaseEntity {
     @Column(name = "current_longitude")
     private Double currentLongitude;
 
+    /** Direção do deslocamento em graus (0-360, norte=0), quando o GPS fornece. Nullable. */
+    @Column(name = "current_heading")
+    private Double currentHeading;
+
     @Column(name = "location_updated_at")
     private Instant locationUpdatedAt;
 

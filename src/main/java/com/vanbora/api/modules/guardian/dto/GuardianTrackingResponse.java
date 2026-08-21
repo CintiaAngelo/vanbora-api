@@ -2,6 +2,7 @@ package com.vanbora.api.modules.guardian.dto;
 
 import com.vanbora.api.modules.route.dto.RouteStopResponse;
 import java.time.Instant;
+import java.util.List;
 
 /**
  * Acompanhamento em tempo real para o responsável. Por privacidade, expõe apenas
@@ -14,6 +15,8 @@ public record GuardianTrackingResponse(
         String studentName,
         Double latitude,
         Double longitude,
+        /** Direção do deslocamento em graus (0-360), quando disponível. */
+        Double heading,
         Instant updatedAt,
         /** Parada de embarque do próprio dependente (ou null). */
         RouteStopResponse myStop,
@@ -32,12 +35,18 @@ public record GuardianTrackingResponse(
         /** Minutos previstos até a chegada na escola. */
         Integer etaToSchoolMinutes,
         /** Horário previsto de chegada na escola ("HH:mm"). */
-        String etaToSchoolClock
+        String etaToSchoolClock,
+        /**
+         * Trajeto seguindo ruas (van → parada do dependente → escola), como lista de
+         * [latitude, longitude]. Null se o roteamento não estiver disponível — o app
+         * cai para linha reta entre os pontos.
+         */
+        List<double[]> routeGeometry
 ) {
     /** Resposta vazia quando o responsável ainda não tem transportador ativo. */
     public static GuardianTrackingResponse none() {
         return new GuardianTrackingResponse(
-                false, null, null, null, null, null, null, null, null, null, false,
-                null, null, null, null);
+                false, null, null, null, null, null, null, null, null, null, null, false,
+                null, null, null, null, null);
     }
 }

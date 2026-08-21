@@ -1,8 +1,12 @@
 package com.vanbora.api.modules.school.domain;
 
+import com.vanbora.api.modules.user.domain.User;
 import com.vanbora.api.shared.domain.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -35,4 +39,13 @@ public class School extends BaseEntity {
 
     private Double latitude;
     private Double longitude;
+
+    /**
+     * Conta de acesso ao painel de gestão da escola (perfil SCHOOL). Nullable: a maioria das
+     * escolas do catálogo é só um registro de endereço, cadastrado por um transportador, sem
+     * login próprio — só passa a ter uma conta quando a escola parceira adere ao painel.
+     */
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", unique = true)
+    private User user;
 }

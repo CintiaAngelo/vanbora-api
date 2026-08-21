@@ -99,6 +99,8 @@ public class DataSeeder {
                 backfillGeo(transporterRepository, routeStopRepository, dependentRepository);
                 backfillNotices(noticeRepository);
                 backfillSchools(schoolRepository);
+                backfillSchoolRefs(schoolRepository, dependentRepository);
+                seedSchoolAccount(userRepository, schoolRepository, passwordEncoder.encode(DEFAULT_PASSWORD));
                 // Recalcula média/contagem reais a partir das avaliações (corrige valores fixos antigos).
                 transporterRepository.findAll().forEach(reviewService::recompute);
                 return;
@@ -112,16 +114,16 @@ public class DataSeeder {
                     userRepository, password, "Roberto Almeida", "roberto@vanbora.com",
                     "ABC-1D34", "••• ••• 1234", 5, new BigDecimal("4.90"), 124,
                     new BigDecimal("350.00"),
-                    Set.of("Colégio Objetivo", "Escola Adventista", "COC"),
+                    Set.of("FIAP School", "Escola Adventista", "COC"),
                     Set.of("Centro", "Vila Nova", "Jd. América"));
             addHelper(roberto, "Carlos Mendes", "Monitor");
             addReview(roberto, "Juliana S.", 5,
                     "Excelente profissional, muito pontual e cuidadoso com as crianças.");
             addReview(roberto, "Marcos T.", 5,
                     "Sempre avisa com antecedência se vai atrasar. Van sempre limpa e organizada.");
-            addPriceZone(roberto, "Premium", "Colégio Objetivo", new BigDecimal("520.00"),
+            addPriceZone(roberto, "Premium", "FIAP School", new BigDecimal("520.00"),
                     Set.of("Jardins", "Moema"));
-            addPriceZone(roberto, "Standard", "Colégio Objetivo", new BigDecimal("380.00"),
+            addPriceZone(roberto, "Standard", "FIAP School", new BigDecimal("380.00"),
                     Set.of("Saúde", "Ipiranga"));
             // Posição inicial do transportador (será sobrescrita pelo GPS do app).
             roberto.setCurrentLatitude(ROBERTO_START_LAT);
@@ -140,9 +142,9 @@ public class DataSeeder {
             GuardianProfile mariana = buildGuardian(
                     userRepository, password, "Mariana Costa", "mariana@vanbora.com",
                     "São Paulo", "Centro");
-            Dependent lucas = addDependent(mariana, "Lucas Costa", "Colégio Objetivo");
+            Dependent lucas = addDependent(mariana, "Lucas Costa", "FIAP School");
             // 2º dependente: usado para demonstrar o fluxo de contratação/assinatura.
-            Dependent sofia = addDependent(mariana, "Sofia Costa", "Colégio Objetivo");
+            Dependent sofia = addDependent(mariana, "Sofia Costa", "FIAP School");
             guardianRepository.save(mariana);
 
             GuardianProfile juliana = buildGuardian(
@@ -201,7 +203,7 @@ public class DataSeeder {
                             RouteStopStatus.GOING, 1, -23.5489, -46.6388),
                     routeStop(roberto, pedro, "Pedro Silva", "Av. Brasil, 456 - Vila Mariana",
                             RouteStopStatus.NOT_GOING, 2, -23.5870, -46.6340),
-                    routeStop(roberto, null, "Colégio Objetivo", "Rua do Parque, 789 - Centro",
+                    routeStop(roberto, null, "FIAP School", "Rua do Parque, 789 - Centro",
                             RouteStopStatus.SCHOOL, 3, -23.5530, -46.6520)));
 
             // ----- Financeiro de demonstração (Roberto) -----
@@ -228,6 +230,10 @@ public class DataSeeder {
 
             // Calcula a média/contagem reais a partir das avaliações semeadas.
             transporterRepository.findAll().forEach(reviewService::recompute);
+
+            // ----- Painel de gestão da escola: vincula os dependentes ao catálogo e cria o login -----
+            backfillSchoolRefs(schoolRepository, dependentRepository);
+            seedSchoolAccount(userRepository, schoolRepository, password);
         };
     }
 
@@ -236,7 +242,7 @@ public class DataSeeder {
         if (schoolRepository.count() > 0) {
             return;
         }
-        schoolRepository.save(school("Colégio Objetivo", "01310-100", "Av. Paulista", "900",
+        schoolRepository.save(school("FIAP School", "01310-100", "Av. Paulista", "900",
                 "Bela Vista", "São Paulo", "SP", -23.5614, -46.6562));
         schoolRepository.save(school("Escola Adventista", "02011-000", "Rua Voluntários da Pátria",
                 "2000", "Santana", "São Paulo", "SP", -23.5012, -46.6256));
@@ -246,6 +252,53 @@ public class DataSeeder {
                 "Vila Mariana", "São Paulo", "SP", -23.5896, -46.6378));
         schoolRepository.save(school("Colégio Santa Cruz", "05058-001", "Rua Orobó", "277",
                 "Alto de Pinheiros", "São Paulo", "SP", -23.5350, -46.7060));
+    }
+
+    /**
+     * Vincula dependentes ao catálogo de escolas (schoolRef) casando o texto livre histórico
+     * (Dependent.school) pelo nome — necessário para o painel de gestão da escola conseguir
+     * enxergar os alunos, já que o cadastro de dependente sempre gravou só o nome em texto.
+     */
+    private void backfillSchoolRefs(SchoolRepository schoolRepository, DependentRepository dependentRepository) {
+        Map<String, School> byName = new HashMap<>();
+        for (School s : schoolRepository.findAll()) {
+            byName.put(s.getName().trim().toLowerCase(), s);
+        }
+        for (Dependent d : dependentRepository.findAll()) {
+            if (d.getSchoolRef() == null && d.getSchool() != null) {
+                School match = byName.get(d.getSchool().trim().toLowerCase());
+                if (match != null) {
+                    d.setSchoolRef(match);
+                    dependentRepository.save(d);
+                }
+            }
+        }
+    }
+
+    /**
+     * Cria a conta de demonstração do painel de gestão (perfil SCHOOL), vinculada à "FIAP
+     * School" — a escola do catálogo com mais dados reais semeados (transportador + alunos).
+     * Idempotente: não faz nada se a conta já existir ou a escola não tiver sido semeada ainda.
+     */
+    private void seedSchoolAccount(UserRepository userRepository, SchoolRepository schoolRepository,
+                                   String passwordHash) {
+        String email = "secretaria@fiapschool.com.br";
+        if (userRepository.existsByEmail(email)) {
+            return;
+        }
+        schoolRepository.findFirstByNameIgnoreCaseAndCep("FIAP School", "01310-100")
+                .filter(school -> school.getUser() == null)
+                .ifPresent(school -> {
+                    User user = new User();
+                    user.setName("Secretaria - FIAP School");
+                    user.setEmail(email);
+                    user.setPasswordHash(passwordHash);
+                    user.setPhone("(11) 93081-4520");
+                    user.setRole(UserRole.SCHOOL);
+                    userRepository.save(user);
+                    school.setUser(user);
+                    schoolRepository.save(school);
+                });
     }
 
     private School school(String name, String cep, String street, String number,
@@ -464,7 +517,7 @@ public class DataSeeder {
         Map<String, double[]> coordsByLabel = Map.of(
                 "Lucas Costa", new double[]{-23.5489, -46.6388},
                 "Pedro Silva", new double[]{-23.5870, -46.6340},
-                "Colégio Objetivo", new double[]{-23.5530, -46.6520});
+                "FIAP School", new double[]{-23.5530, -46.6520});
 
         // Index de dependentes por nome, para reconectar paradas antigas (label == nome).
         Map<String, Dependent> dependentByName = new HashMap<>();

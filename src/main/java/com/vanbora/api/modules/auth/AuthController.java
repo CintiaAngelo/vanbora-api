@@ -46,6 +46,6 @@ public class AuthController {
 
     @GetMapping("/me")
     public ResponseEntity<UserResponse> me() {
-        return ResponseEntity.ok(UserResponse.from(currentUserProvider.requireUser()));
+        return ResponseEntity.ok(authService.getCurrentUser(currentUserProvider.requireUserId()));
     }
 }

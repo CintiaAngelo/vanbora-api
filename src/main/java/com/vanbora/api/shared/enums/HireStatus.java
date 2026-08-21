@@ -8,5 +8,7 @@ public enum HireStatus {
     /** Cancelada pelo responsável antes de o transportador responder. */
     CANCELLED,
     /** Expirada automaticamente (transportador não respondeu no prazo). */
-    EXPIRED
+    EXPIRED,
+    /** Transportador contrapropôs outro valor; aguardando resposta do responsável. */
+    COUNTERED
 }

@@ -28,4 +28,7 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
             Long guardianId, Long transporterId);
 
     long countByTransporterId(Long transporterId);
+
+    /** Matrículas ativas de alunos vinculados a uma escola do catálogo (visão do painel escolar). */
+    List<Enrollment> findByDependent_SchoolRef_IdAndActiveTrue(Long schoolId);
 }

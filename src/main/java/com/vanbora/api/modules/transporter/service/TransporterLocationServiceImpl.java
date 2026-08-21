@@ -50,6 +50,11 @@ public class TransporterLocationServiceImpl implements TransporterLocationServic
 
         transporter.setCurrentLatitude(request.latitude());
         transporter.setCurrentLongitude(request.longitude());
+        // Só atualiza quando enviado: heading fica ausente com o veículo parado (GPS não
+        // reporta direção sem movimento) — mantém o último valor válido conhecido.
+        if (request.heading() != null) {
+            transporter.setCurrentHeading(request.heading());
+        }
         transporter.setLocationUpdatedAt(Instant.now());
         transporterRepository.save(transporter);
 

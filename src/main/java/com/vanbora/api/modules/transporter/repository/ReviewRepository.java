@@ -14,4 +14,7 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     /** Última avaliação deste responsável para este transportador (p/ pesquisa de 3 meses). */
     Optional<Review> findFirstByTransporterIdAndGuardianIdOrderByCreatedAtDesc(
             Long transporterId, Long guardianId);
+
+    /** Avaliações recentes de um conjunto de transportadores (atividade recente do painel escolar). */
+    List<Review> findByTransporterIdInOrderByCreatedAtDesc(List<Long> transporterIds);
 }

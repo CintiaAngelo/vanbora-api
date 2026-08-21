@@ -7,12 +7,14 @@ import java.time.Instant;
 public record TransporterLocationResponse(
         Double latitude,
         Double longitude,
+        Double heading,
         Instant updatedAt
 ) {
     public static TransporterLocationResponse from(TransporterProfile transporter) {
         return new TransporterLocationResponse(
                 transporter.getCurrentLatitude(),
                 transporter.getCurrentLongitude(),
+                transporter.getCurrentHeading(),
                 transporter.getLocationUpdatedAt());
     }
 }

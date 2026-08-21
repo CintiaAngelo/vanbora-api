@@ -3,6 +3,7 @@ package com.vanbora.api.modules.auth;
 import com.vanbora.api.modules.auth.dto.ChangePasswordRequest;
 import com.vanbora.api.modules.auth.dto.ConsentStatusResponse;
 import com.vanbora.api.modules.auth.dto.PushTokenRequest;
+import com.vanbora.api.modules.auth.dto.UpdateOnboardingRequest;
 import com.vanbora.api.modules.auth.service.AuthService;
 import com.vanbora.api.modules.notification.PushNotificationService;
 import com.vanbora.api.security.CurrentUserProvider;
@@ -11,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -65,6 +67,13 @@ public class AccountController {
     @DeleteMapping("/push-token")
     public ResponseEntity<Void> removePushToken(@Valid @RequestBody PushTokenRequest request) {
         pushNotificationService.removeToken(request.token());
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Registra que o usuário viu (ou dispensou) uma versão do guia de funcionalidades. */
+    @PutMapping("/onboarding")
+    public ResponseEntity<Void> updateOnboarding(@Valid @RequestBody UpdateOnboardingRequest request) {
+        authService.updateOnboardingProgress(currentUserProvider.requireUserId(), request.seenVersion());
         return ResponseEntity.noContent().build();
     }
 }

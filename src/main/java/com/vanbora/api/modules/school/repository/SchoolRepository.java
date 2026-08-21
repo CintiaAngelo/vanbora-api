@@ -16,4 +16,7 @@ public interface SchoolRepository extends JpaRepository<School, Long> {
     Optional<School> findFirstByNameIgnoreCaseAndCep(String name, String cep);
 
     boolean existsByNameIgnoreCase(String name);
+
+    /** Escola vinculada à conta (perfil SCHOOL) do usuário autenticado no painel de gestão. */
+    Optional<School> findByUserId(Long userId);
 }

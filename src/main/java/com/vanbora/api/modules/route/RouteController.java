@@ -1,9 +1,8 @@
 package com.vanbora.api.modules.route;
 
-import com.vanbora.api.modules.route.dto.RouteStopResponse;
+import com.vanbora.api.modules.route.dto.RouteResponse;
 import com.vanbora.api.modules.route.service.RouteService;
 import com.vanbora.api.security.CurrentUserProvider;
-import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,13 +24,13 @@ public class RouteController {
     }
 
     @GetMapping
-    public List<RouteStopResponse> route() {
+    public RouteResponse route() {
         return routeService.listForUser(currentUserProvider.requireUserId());
     }
 
     /** Recalcula a melhor ordem das paradas e devolve a rota já reordenada. */
     @PostMapping("/optimize")
-    public List<RouteStopResponse> optimize() {
+    public RouteResponse optimize() {
         return routeService.optimizeForUser(currentUserProvider.requireUserId());
     }
 }

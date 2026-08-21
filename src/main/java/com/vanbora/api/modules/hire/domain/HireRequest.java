@@ -49,6 +49,10 @@ public class HireRequest extends BaseEntity {
     @Column(name = "proposed_fee", precision = 10, scale = 2)
     private BigDecimal proposedFee;
 
+    /** Contraproposta do transportador em resposta ao proposedFee. Null = sem contraproposta. */
+    @Column(name = "counter_fee", precision = 10, scale = 2)
+    private BigDecimal counterFee;
+
     /** Prazo para o transportador responder; após isso, expira automaticamente. */
     @Column(name = "expires_at")
     private Instant expiresAt;

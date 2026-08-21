@@ -1,5 +1,6 @@
 package com.vanbora.api.modules.hire;
 
+import com.vanbora.api.modules.hire.dto.CounterProposalRequest;
 import com.vanbora.api.modules.hire.dto.CreateHireRequest;
 import com.vanbora.api.modules.hire.dto.GuardianForTransporterResponse;
 import com.vanbora.api.modules.hire.dto.HireRequestResponse;
@@ -55,6 +56,30 @@ public class HireController {
     @PreAuthorize("hasRole('TRANSPORTER')")
     public ResponseEntity<Void> reject(@PathVariable Long id) {
         hireService.reject(currentUserProvider.requireUserId(), id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** [Transportador] Contrapropõe outro valor em resposta à proposta do responsável. */
+    @PostMapping("/{id}/counter")
+    @PreAuthorize("hasRole('TRANSPORTER')")
+    public ResponseEntity<Void> counter(@PathVariable Long id, @Valid @RequestBody CounterProposalRequest request) {
+        hireService.counterPropose(currentUserProvider.requireUserId(), id, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** [Responsável] Aceita a contraproposta do transportador. */
+    @PostMapping("/{id}/accept-counter")
+    @PreAuthorize("hasRole('GUARDIAN')")
+    public ResponseEntity<Void> acceptCounter(@PathVariable Long id) {
+        hireService.acceptCounterProposal(currentUserProvider.requireUserId(), id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** [Responsável] Recusa a contraproposta do transportador. */
+    @PostMapping("/{id}/reject-counter")
+    @PreAuthorize("hasRole('GUARDIAN')")
+    public ResponseEntity<Void> rejectCounter(@PathVariable Long id) {
+        hireService.rejectCounterProposal(currentUserProvider.requireUserId(), id);
         return ResponseEntity.noContent().build();
     }
 

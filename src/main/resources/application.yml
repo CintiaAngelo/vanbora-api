@@ -43,6 +43,13 @@ vanbora:
   uploads:
     dir: ${VANBORA_UPLOADS_DIR:uploads}
     public-path: /uploads
+  # Roteamento real (rota seguindo ruas) via OpenRouteService — gratuito, free tier
+  # 2000 req/dia. Sem chave configurada, a rota é desenhada em linha reta (fallback).
+  # Crie uma chave grátis em https://openrouteservice.org/dev-dashboard.
+  routing:
+    ors:
+      base-url: ${ORS_BASE_URL:https://api.openrouteservice.org}
+      api-key: ${ORS_API_KEY:}
   # Gateway de pagamento: "simulated" (default) ou "mercadopago".
   payments:
     provider: ${VANBORA_PAYMENTS_PROVIDER:simulated}

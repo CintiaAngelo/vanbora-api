@@ -29,7 +29,14 @@ public record GuardianDashboardResponse(
         Instant pendingHireExpiresAt,
         /** Solicitação recusada ainda não dispensada pelo responsável. */
         Long rejectedHireRequestId,
-        String rejectedHireTransporterName
+        String rejectedHireTransporterName,
+        /** Contraproposta do transportador aguardando resposta do responsável. */
+        Long counterHireRequestId,
+        String counterHireTransporterName,
+        /** Valor que o responsável havia proposto originalmente. */
+        BigDecimal counterOriginalFee,
+        /** Novo valor contraproposto pelo transportador. */
+        BigDecimal counterProposedFee
 ) {
     /** Presença em um dia da semana (rótulo SEG..SEX + data ISO + se vai). */
     public record DayAttendance(String day, String date, boolean present) {

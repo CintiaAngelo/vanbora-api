@@ -7,6 +7,7 @@ import com.vanbora.api.modules.guardian.repository.DependentRepository;
 import com.vanbora.api.modules.guardian.repository.GuardianProfileRepository;
 import com.vanbora.api.modules.hire.domain.Contract;
 import com.vanbora.api.modules.hire.domain.HireRequest;
+import com.vanbora.api.modules.hire.dto.CounterProposalRequest;
 import com.vanbora.api.modules.hire.dto.CreateHireRequest;
 import com.vanbora.api.modules.hire.dto.GuardianForTransporterResponse;
 import com.vanbora.api.modules.hire.dto.HireRequestResponse;
@@ -20,6 +21,7 @@ import com.vanbora.api.shared.enums.ContractStatus;
 import com.vanbora.api.shared.enums.HireStatus;
 import com.vanbora.api.shared.exception.BusinessException;
 import com.vanbora.api.shared.exception.ResourceNotFoundException;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -164,27 +166,12 @@ public class HireServiceImpl implements HireService {
         HireRequest hire = requireOwnedRequest(transporterUserId, hireRequestId);
         hire.setStatus(HireStatus.ACCEPTED);
 
-        // Liberar contrato: cria o contrato pendente e notifica o responsável.
-        // A matrícula só nasce quando o responsável assina (ContractService.sign).
-        Contract contract = new Contract();
-        contract.setHireRequest(hire);
-        contract.setGuardian(hire.getGuardian());
-        contract.setTransporter(hire.getTransporter());
-        contract.setDependent(hire.getDependent());
         // Usa a proposta aceita pelo transportador, ou o valor de tabela quando não há proposta.
-        contract.setMonthlyFee(hire.getProposedFee() != null
+        BigDecimal monthlyFee = hire.getProposedFee() != null
                 ? hire.getProposedFee()
-                : hire.getTransporter().getBaseMonthlyFee());
-        // Congela os demais planos ofertados (anual/parcelado) para o responsável escolher ao assinar.
-        contract.setAnnualPlanFee(hire.getTransporter().getAnnualPlanFee());
-        contract.setInstallmentMonthlyFee(hire.getTransporter().getInstallmentMonthlyFee());
-        contract.setStatus(ContractStatus.PENDING_SIGNATURE);
-        contract.setSignatureToken(UUID.randomUUID().toString().replace("-", ""));
-        // Congela o texto (modelo do transportador ou padrão) que o responsável assinará.
-        contract.setContractText(contractTextBuilder.build(contract));
-        contractRepository.save(contract);
+                : hire.getTransporter().getBaseMonthlyFee();
+        Contract contract = createContractFromHire(hire, monthlyFee);
 
-        notificationService.notifyContractReleased(contract);
         // Avisa o responsável que o contrato foi liberado para assinatura.
         pushNotificationService.sendToUser(
                 hire.getGuardian().getUser().getId(),
@@ -207,6 +194,85 @@ public class HireServiceImpl implements HireService {
                 hire.getTransporter().getUser().getName()
                         + " não aceitou sua solicitação para " + hire.getDependent().getName() + ".",
                 Map.of("type", "HIRE_REJECTED"));
+    }
+
+    @Override
+    @Transactional
+    public void counterPropose(Long transporterUserId, Long hireRequestId, CounterProposalRequest request) {
+        HireRequest hire = requireOwnedRequest(transporterUserId, hireRequestId);
+        if (hire.getProposedFee() == null) {
+            throw new BusinessException("Esta solicitação não tem uma proposta de valor para contrapropor.");
+        }
+        hire.setStatus(HireStatus.COUNTERED);
+        hire.setCounterFee(request.fee());
+
+        // Avisa o responsável que precisa responder à contraproposta.
+        pushNotificationService.sendToUser(
+                hire.getGuardian().getUser().getId(),
+                "Contraproposta recebida",
+                hire.getTransporter().getUser().getName()
+                        + " propôs outro valor para " + hire.getDependent().getName()
+                        + ". Toque para responder.",
+                Map.of("type", "HIRE_COUNTERED"));
+    }
+
+    @Override
+    @Transactional
+    public void acceptCounterProposal(Long guardianUserId, Long hireRequestId) {
+        HireRequest hire = requireOwnGuardianRequest(guardianUserId, hireRequestId);
+        if (hire.getStatus() != HireStatus.COUNTERED) {
+            throw new BusinessException("Esta solicitação não tem uma contraproposta pendente.");
+        }
+        hire.setStatus(HireStatus.ACCEPTED);
+        Contract contract = createContractFromHire(hire, hire.getCounterFee());
+
+        pushNotificationService.sendToUser(
+                hire.getTransporter().getUser().getId(),
+                "Contraproposta aceita!",
+                hire.getGuardian().getUser().getName()
+                        + " aceitou sua contraproposta para " + hire.getDependent().getName() + ".",
+                Map.of("type", "COUNTER_ACCEPTED", "contractId", contract.getId()));
+    }
+
+    @Override
+    @Transactional
+    public void rejectCounterProposal(Long guardianUserId, Long hireRequestId) {
+        HireRequest hire = requireOwnGuardianRequest(guardianUserId, hireRequestId);
+        if (hire.getStatus() != HireStatus.COUNTERED) {
+            throw new BusinessException("Esta solicitação não tem uma contraproposta pendente.");
+        }
+        hire.setStatus(HireStatus.REJECTED);
+
+        pushNotificationService.sendToUser(
+                hire.getTransporter().getUser().getId(),
+                "Contraproposta recusada",
+                hire.getGuardian().getUser().getName()
+                        + " recusou sua contraproposta para " + hire.getDependent().getName() + ".",
+                Map.of("type", "HIRE_REJECTED"));
+    }
+
+    /**
+     * Libera o contrato pendente de assinatura para a solicitação, com o valor mensal
+     * combinado (tabela, proposta do responsável ou contraproposta do transportador).
+     * A matrícula só nasce quando o responsável assina (ContractService.sign).
+     */
+    private Contract createContractFromHire(HireRequest hire, BigDecimal monthlyFee) {
+        Contract contract = new Contract();
+        contract.setHireRequest(hire);
+        contract.setGuardian(hire.getGuardian());
+        contract.setTransporter(hire.getTransporter());
+        contract.setDependent(hire.getDependent());
+        contract.setMonthlyFee(monthlyFee);
+        // Congela os demais planos ofertados (anual/parcelado) para o responsável escolher ao assinar.
+        contract.setAnnualPlanFee(hire.getTransporter().getAnnualPlanFee());
+        contract.setInstallmentMonthlyFee(hire.getTransporter().getInstallmentMonthlyFee());
+        contract.setStatus(ContractStatus.PENDING_SIGNATURE);
+        contract.setSignatureToken(UUID.randomUUID().toString().replace("-", ""));
+        // Congela o texto (modelo do transportador ou padrão) que o responsável assinará.
+        contract.setContractText(contractTextBuilder.build(contract));
+        contractRepository.save(contract);
+        notificationService.notifyContractReleased(contract);
+        return contract;
     }
 
     @Override

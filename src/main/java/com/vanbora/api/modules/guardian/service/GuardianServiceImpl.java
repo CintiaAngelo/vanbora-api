@@ -39,11 +39,13 @@ import com.vanbora.api.shared.enums.HireStatus;
 import com.vanbora.api.shared.enums.PaymentStatus;
 import com.vanbora.api.shared.enums.RouteStopStatus;
 import com.vanbora.api.shared.eta.EtaEstimator;
+import com.vanbora.api.shared.geo.RoutingService;
 import com.vanbora.api.shared.exception.BusinessException;
 import com.vanbora.api.shared.exception.ResourceNotFoundException;
 import com.vanbora.api.shared.storage.StorageService;
 import com.vanbora.api.shared.util.GeoUtils;
 import org.springframework.web.multipart.MultipartFile;
+import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -87,6 +89,7 @@ public class GuardianServiceImpl implements GuardianService {
     private final GuardianAddressService guardianAddressService;
     private final StorageService storageService;
     private final EtaEstimator etaEstimator;
+    private final RoutingService routingService;
 
     public GuardianServiceImpl(
             GuardianProfileRepository guardianRepository,
@@ -102,7 +105,8 @@ public class GuardianServiceImpl implements GuardianService {
             SchoolRepository schoolRepository,
             GuardianAddressService guardianAddressService,
             StorageService storageService,
-            EtaEstimator etaEstimator) {
+            EtaEstimator etaEstimator,
+            RoutingService routingService) {
         this.guardianRepository = guardianRepository;
         this.dependentRepository = dependentRepository;
         this.enrollmentRepository = enrollmentRepository;
@@ -117,6 +121,7 @@ public class GuardianServiceImpl implements GuardianService {
         this.guardianAddressService = guardianAddressService;
         this.storageService = storageService;
         this.etaEstimator = etaEstimator;
+        this.routingService = routingService;
     }
 
     @Override
@@ -232,7 +237,8 @@ public class GuardianServiceImpl implements GuardianService {
             // Responsável sem dependentes cadastrados.
             return new GuardianDashboardResponse(
                     false, null, null, null, null, null, false, null, List.of(), null, null,
-                    null, null, null, null, null);
+                    null, null, null, null, null,
+                    null, null, null, null);
         }
 
         Long depId = dependent.getId();
@@ -247,12 +253,13 @@ public class GuardianServiceImpl implements GuardianService {
 
         Optional<Enrollment> enrollmentOpt = activeEnrollment(guardian, dependent);
         if (enrollmentOpt.isEmpty()) {
-            // Dependente sem transportador (solicitação pendente / recusada / em contratação).
+            // Dependente sem transportador (solicitação pendente / recusada / em contratação / contraproposta).
             return new GuardianDashboardResponse(
                     false, depId, dependent.getName(), pendingContractId,
                     null, null, false, null, List.of(), null, null,
                     hire.pendingId(), hire.pendingName(), hire.pendingExpiry(),
-                    hire.rejectedId(), hire.rejectedName());
+                    hire.rejectedId(), hire.rejectedName(),
+                    hire.counterId(), hire.counterName(), hire.counterOriginalFee(), hire.counterProposedFee());
         }
 
         Enrollment enrollment = enrollmentOpt.get();
@@ -276,14 +283,17 @@ public class GuardianServiceImpl implements GuardianService {
                 week,
                 nextPayment,
                 notice,
-                null, null, null, null, null);
+                null, null, null, null, null,
+                null, null, null, null);
     }
 
-    /** Campos de acompanhamento da solicitação (pendente/recusada) para o dependente. */
+    /** Campos de acompanhamento da solicitação (pendente/recusada/contraproposta) para o dependente. */
     private record HireState(
             Long pendingId, String pendingName, java.time.Instant pendingExpiry,
-            Long rejectedId, String rejectedName) {
-        static final HireState NONE = new HireState(null, null, null, null, null);
+            Long rejectedId, String rejectedName,
+            Long counterId, String counterName, BigDecimal counterOriginalFee, BigDecimal counterProposedFee) {
+        static final HireState NONE =
+                new HireState(null, null, null, null, null, null, null, null, null);
     }
 
     /** Deriva o estado de acompanhamento a partir da solicitação mais recente do dependente. */
@@ -296,11 +306,17 @@ public class GuardianServiceImpl implements GuardianService {
         }
         if (latest.getStatus() == HireStatus.PENDING && !latest.isOverdue()) {
             return new HireState(latest.getId(), latest.getTransporter().getUser().getName(),
-                    latest.effectiveExpiry(), null, null);
+                    latest.effectiveExpiry(), null, null, null, null, null, null);
+        }
+        if (latest.getStatus() == HireStatus.COUNTERED) {
+            return new HireState(null, null, null, null, null,
+                    latest.getId(), latest.getTransporter().getUser().getName(),
+                    latest.getProposedFee(), latest.getCounterFee());
         }
         if (latest.getStatus() == HireStatus.REJECTED && latest.getGuardianDismissedAt() == null) {
             return new HireState(null, null, null,
-                    latest.getId(), latest.getTransporter().getUser().getName());
+                    latest.getId(), latest.getTransporter().getUser().getName(),
+                    null, null, null, null);
         }
         return HireState.NONE;
     }
@@ -462,6 +478,10 @@ public class GuardianServiceImpl implements GuardianService {
 
         List<RouteStop> stops =
                 routeStopRepository.findByTransporterIdOrderByPositionAsc(transporter.getId());
+        // Quem avisou falta hoje não conta como embarque ativo (mesma fonte da verdade da
+        // rota do transportador) — calculado na leitura, nunca persistido em RouteStop.
+        Set<Long> absentDependentIds =
+                absenceRepository.findAbsentDependentIds(transporter.getId(), LocalDate.now());
 
         // Apenas a parada do próprio dependente e a escola — nada de outros responsáveis.
         RouteStop myStop = stops.stream()
@@ -478,12 +498,13 @@ public class GuardianServiceImpl implements GuardianService {
                         .findFirst()
                         .orElse(null));
 
-        // Ordem de embarque entre os alunos que VÃO hoje (por posição da rota).
+        // Ordem de embarque entre os alunos que VÃO hoje (por posição da rota, excluindo faltas de hoje).
         List<RouteStop> activePickups = stops.stream()
-                .filter(s -> s.getStatus() == RouteStopStatus.GOING)
+                .filter(s -> s.getStatus() != RouteStopStatus.SCHOOL)
+                .filter(s -> s.getDependent() == null || !absentDependentIds.contains(s.getDependent().getId()))
                 .sorted(Comparator.comparingInt(RouteStop::getPosition))
                 .toList();
-        boolean goingToday = myStop != null && myStop.getStatus() == RouteStopStatus.GOING;
+        boolean goingToday = myStop != null && !absentDependentIds.contains(myDependentId);
         Integer myOrder = null;
         if (goingToday) {
             for (int i = 0; i < activePickups.size(); i++) {
@@ -528,12 +549,28 @@ public class GuardianServiceImpl implements GuardianService {
             }
         }
 
+        // Trajeto seguindo ruas: van → parada do dependente (se ele for hoje) → escola.
+        // Nunca inclui as paradas de outros alunos como waypoints.
+        List<double[]> routeGeometry = null;
+        if (curLat != null && curLon != null) {
+            List<double[]> waypoints = new ArrayList<>();
+            waypoints.add(new double[] {curLat, curLon});
+            if (goingToday && myStop != null && myStop.getLatitude() != null && myStop.getLongitude() != null) {
+                waypoints.add(new double[] {myStop.getLatitude(), myStop.getLongitude()});
+            }
+            if (schoolStop != null && schoolStop.getLatitude() != null && schoolStop.getLongitude() != null) {
+                waypoints.add(new double[] {schoolStop.getLatitude(), schoolStop.getLongitude()});
+            }
+            routeGeometry = routingService.route(waypoints).orElse(null);
+        }
+
         return new GuardianTrackingResponse(
                 true,
                 transporter.getUser().getName(),
                 enrollment.getDependent().getName(),
                 transporter.getCurrentLatitude(),
                 transporter.getCurrentLongitude(),
+                transporter.getCurrentHeading(),
                 transporter.getLocationUpdatedAt(),
                 myStop != null ? RouteStopResponse.from(myStop) : null,
                 schoolStop != null ? RouteStopResponse.from(schoolStop) : null,
@@ -543,7 +580,8 @@ public class GuardianServiceImpl implements GuardianService {
                 etaStudentMin,
                 etaStudentClock,
                 etaSchoolMin,
-                etaSchoolClock);
+                etaSchoolClock,
+                routeGeometry);
     }
 
     private static final int UPCOMING_SCHOOL_DAYS = 10;

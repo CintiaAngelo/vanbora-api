@@ -11,8 +11,10 @@ import com.vanbora.api.modules.guardian.domain.GuardianProfile;
 import com.vanbora.api.modules.guardian.repository.GuardianProfileRepository;
 import com.vanbora.api.modules.transporter.domain.TransporterProfile;
 import com.vanbora.api.modules.transporter.repository.TransporterProfileRepository;
+import com.vanbora.api.modules.user.domain.OnboardingProgress;
 import com.vanbora.api.modules.user.domain.User;
 import com.vanbora.api.modules.user.domain.UserConsent;
+import com.vanbora.api.modules.user.repository.OnboardingProgressRepository;
 import com.vanbora.api.modules.user.repository.UserConsentRepository;
 import com.vanbora.api.modules.user.repository.UserRepository;
 import com.vanbora.api.security.jwt.JwtService;
@@ -38,6 +40,7 @@ public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
     private final UserConsentRepository userConsentRepository;
+    private final OnboardingProgressRepository onboardingProgressRepository;
     private final GuardianProfileRepository guardianProfileRepository;
     private final TransporterProfileRepository transporterProfileRepository;
     private final PasswordEncoder passwordEncoder;
@@ -48,6 +51,7 @@ public class AuthServiceImpl implements AuthService {
     public AuthServiceImpl(
             UserRepository userRepository,
             UserConsentRepository userConsentRepository,
+            OnboardingProgressRepository onboardingProgressRepository,
             GuardianProfileRepository guardianProfileRepository,
             TransporterProfileRepository transporterProfileRepository,
             PasswordEncoder passwordEncoder,
@@ -56,6 +60,7 @@ public class AuthServiceImpl implements AuthService {
             GuardianAddressService guardianAddressService) {
         this.userRepository = userRepository;
         this.userConsentRepository = userConsentRepository;
+        this.onboardingProgressRepository = onboardingProgressRepository;
         this.guardianProfileRepository = guardianProfileRepository;
         this.transporterProfileRepository = transporterProfileRepository;
         this.passwordEncoder = passwordEncoder;
@@ -133,6 +138,31 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new BusinessException("Usuário não encontrado."));
 
         return buildResponse(user);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserResponse getCurrentUser(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException("Usuário não encontrado."));
+        return UserResponse.from(user, lastSeenOnboardingVersion(userId));
+    }
+
+    @Override
+    @Transactional
+    public void updateOnboardingProgress(Long userId, int seenVersion) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException("Usuário não encontrado."));
+        OnboardingProgress progress = onboardingProgressRepository.findByUserId(userId)
+                .orElseGet(() -> {
+                    OnboardingProgress created = new OnboardingProgress();
+                    created.setUser(user);
+                    created.setLastSeenVersion(0);
+                    return created;
+                });
+        // Nunca regride: o guia é cumulativo, uma marcação antiga não deve "desmarcar" uma nova.
+        progress.setLastSeenVersion(Math.max(progress.getLastSeenVersion(), seenVersion));
+        onboardingProgressRepository.save(progress);
     }
 
     @Override
@@ -232,6 +262,13 @@ public class AuthServiceImpl implements AuthService {
 
     private AuthResponse buildResponse(User user) {
         String token = jwtService.generateToken(user);
-        return AuthResponse.of(token, jwtService.getExpirationMillis(), UserResponse.from(user));
+        UserResponse userResponse = UserResponse.from(user, lastSeenOnboardingVersion(user.getId()));
+        return AuthResponse.of(token, jwtService.getExpirationMillis(), userResponse);
+    }
+
+    private int lastSeenOnboardingVersion(Long userId) {
+        return onboardingProgressRepository.findByUserId(userId)
+                .map(OnboardingProgress::getLastSeenVersion)
+                .orElse(0);
     }
 }
