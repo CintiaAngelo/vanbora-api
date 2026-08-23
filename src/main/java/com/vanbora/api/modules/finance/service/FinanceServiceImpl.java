@@ -33,7 +33,6 @@ import com.vanbora.api.modules.payment.repository.PaymentRepository;
 import com.vanbora.api.modules.transporter.domain.TransporterProfile;
 import com.vanbora.api.modules.transporter.repository.TransporterProfileRepository;
 import com.vanbora.api.shared.enums.PaymentStatus;
-import com.vanbora.api.shared.exception.BusinessException;
 import com.vanbora.api.shared.exception.ResourceNotFoundException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -241,9 +240,8 @@ public class FinanceServiceImpl implements FinanceService {
     @Transactional
     public ExpenseResponse updateExpense(Long userId, Long expenseId, CreateExpenseRequest request) {
         Long id = resolve(userId).getId();
-        Expense expense = expenseRepository.findById(expenseId)
+        Expense expense = expenseRepository.findByIdAndTransporterId(expenseId, id)
                 .orElseThrow(() -> ResourceNotFoundException.of("Gasto", expenseId));
-        ensureOwner(expense.getTransporter().getId(), id);
         apply(expense, request);
         return ExpenseResponse.from(expenseRepository.save(expense));
     }
@@ -252,9 +250,8 @@ public class FinanceServiceImpl implements FinanceService {
     @Transactional
     public void deleteExpense(Long userId, Long expenseId) {
         Long id = resolve(userId).getId();
-        Expense expense = expenseRepository.findById(expenseId)
+        Expense expense = expenseRepository.findByIdAndTransporterId(expenseId, id)
                 .orElseThrow(() -> ResourceNotFoundException.of("Gasto", expenseId));
-        ensureOwner(expense.getTransporter().getId(), id);
         expenseRepository.delete(expense);
     }
 
@@ -285,9 +282,8 @@ public class FinanceServiceImpl implements FinanceService {
     @Transactional
     public void deleteFuel(Long userId, Long fuelId) {
         Long id = resolve(userId).getId();
-        FuelEntry entry = fuelRepository.findById(fuelId)
+        FuelEntry entry = fuelRepository.findByIdAndTransporterId(fuelId, id)
                 .orElseThrow(() -> ResourceNotFoundException.of("Abastecimento", fuelId));
-        ensureOwner(entry.getTransporter().getId(), id);
         fuelRepository.delete(entry);
     }
 
@@ -503,12 +499,6 @@ public class FinanceServiceImpl implements FinanceService {
     private String monthLabel(String yearMonth) {
         return YearMonth.parse(yearMonth).getMonth()
                 .getDisplayName(TextStyle.SHORT, PT_BR).toUpperCase(PT_BR).replace(".", "");
-    }
-
-    private void ensureOwner(Long ownerId, Long transporterId) {
-        if (!ownerId.equals(transporterId)) {
-            throw new BusinessException("Este registro não pertence ao transportador autenticado.");
-        }
     }
 
     private TransporterProfile resolve(Long userId) {

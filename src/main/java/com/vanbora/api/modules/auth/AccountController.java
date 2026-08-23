@@ -66,7 +66,7 @@ public class AccountController {
     /** Remove o token de push (ex.: logout). */
     @DeleteMapping("/push-token")
     public ResponseEntity<Void> removePushToken(@Valid @RequestBody PushTokenRequest request) {
-        pushNotificationService.removeToken(request.token());
+        pushNotificationService.removeToken(currentUserProvider.requireUserId(), request.token());
         return ResponseEntity.noContent().build();
     }
 

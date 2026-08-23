@@ -81,6 +81,7 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+        // Strength 12 (default é 10) — margem extra de custo computacional contra brute force offline.
+        return new BCryptPasswordEncoder(12);
     }
 }

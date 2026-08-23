@@ -13,5 +13,5 @@ public interface PushTokenRepository extends JpaRepository<PushToken, Long> {
     Optional<PushToken> findByToken(String token);
 
     @Transactional
-    void deleteByToken(String token);
+    void deleteByTokenAndUserId(String token, Long userId);
 }

@@ -51,11 +51,11 @@ public class PushNotificationService {
         tokenRepository.save(entity);
     }
 
-    /** Remove o token (ex.: logout). */
+    /** Remove o token (ex.: logout). Escopado pelo usuário dono — evita remover token de outro usuário. */
     @Transactional
-    public void removeToken(String token) {
+    public void removeToken(Long userId, String token) {
         if (StringUtils.hasText(token)) {
-            tokenRepository.deleteByToken(token.trim());
+            tokenRepository.deleteByTokenAndUserId(token.trim(), userId);
         }
     }
 

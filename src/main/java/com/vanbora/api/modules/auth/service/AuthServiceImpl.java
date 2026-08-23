@@ -17,6 +17,7 @@ import com.vanbora.api.modules.user.domain.UserConsent;
 import com.vanbora.api.modules.user.repository.OnboardingProgressRepository;
 import com.vanbora.api.modules.user.repository.UserConsentRepository;
 import com.vanbora.api.modules.user.repository.UserRepository;
+import com.vanbora.api.security.LoginAttemptService;
 import com.vanbora.api.security.jwt.JwtService;
 import com.vanbora.api.shared.enums.ConsentType;
 import com.vanbora.api.shared.enums.UserRole;
@@ -29,6 +30,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -47,6 +49,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final GuardianAddressService guardianAddressService;
+    private final LoginAttemptService loginAttemptService;
 
     public AuthServiceImpl(
             UserRepository userRepository,
@@ -57,7 +60,8 @@ public class AuthServiceImpl implements AuthService {
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             AuthenticationManager authenticationManager,
-            GuardianAddressService guardianAddressService) {
+            GuardianAddressService guardianAddressService,
+            LoginAttemptService loginAttemptService) {
         this.userRepository = userRepository;
         this.userConsentRepository = userConsentRepository;
         this.onboardingProgressRepository = onboardingProgressRepository;
@@ -67,6 +71,7 @@ public class AuthServiceImpl implements AuthService {
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
         this.guardianAddressService = guardianAddressService;
+        this.loginAttemptService = loginAttemptService;
     }
 
     @Override
@@ -131,8 +136,15 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest request) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.email(), request.password()));
+        loginAttemptService.checkAllowed(request.email());
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.email(), request.password()));
+        } catch (AuthenticationException ex) {
+            loginAttemptService.recordFailure(request.email());
+            throw ex;
+        }
+        loginAttemptService.recordSuccess(request.email());
 
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new BusinessException("Usuário não encontrado."));

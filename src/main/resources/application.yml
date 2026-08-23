@@ -30,10 +30,21 @@ server:
 
 # Configuração da API VanBora
 vanbora:
+  # "development" (default) ou "production". Em produção, a API se recusa a subir
+  # se VANBORA_JWT_SECRET não tiver sido definido (ver SecurityStartupChecks).
+  environment: ${VANBORA_ENV:development}
   jwt:
     # Em produção, defina VANBORA_JWT_SECRET com um valor forte (>= 32 caracteres).
     secret: ${VANBORA_JWT_SECRET:vanbora-dev-secret-change-me-please-0123456789-abcdefghij}
     expiration-millis: ${VANBORA_JWT_EXPIRATION:86400000}
+  # Origens liberadas no CORS, separadas por vírgula. Em produção, defina com os
+  # domínios reais (nunca curinga irrestrito combinado com credentials).
+  cors:
+    allowed-origins: ${VANBORA_CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*,http://192.168.*.*:*,http://10.*.*.*:*,exp://*}
+  login:
+    # Proteção contra força bruta no login (ver LoginAttemptService).
+    max-attempts: ${VANBORA_LOGIN_MAX_ATTEMPTS:5}
+    lockout-minutes: ${VANBORA_LOGIN_LOCKOUT_MINUTES:15}
   # Popula dados de demonstração na primeira execução (banco vazio).
   seed-demo-data: ${VANBORA_SEED:true}
   # Link base usado nos e-mails (assinatura de contrato). Deep link do app por padrão.
