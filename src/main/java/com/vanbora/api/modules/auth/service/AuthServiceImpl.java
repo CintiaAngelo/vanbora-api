@@ -25,6 +25,7 @@ import com.vanbora.api.modules.guardian.service.GuardianAddressService;
 import com.vanbora.api.shared.exception.BusinessException;
 import com.vanbora.api.shared.legal.LegalDocuments;
 import com.vanbora.api.shared.validation.DocumentValidations;
+import com.vanbora.api.shared.validation.TextNormalization;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -127,6 +128,12 @@ public class AuthServiceImpl implements AuthService {
                 request.baseMonthlyFee() != null ? request.baseMonthlyFee() : BigDecimal.ZERO);
         addCleaned(profile.getSchools(), request.schools());
         addCleaned(profile.getNeighborhoods(), request.neighborhoods());
+        if (request.vehicleCharacteristics() != null) {
+            profile.getVehicleCharacteristics().addAll(request.vehicleCharacteristics());
+        }
+        if (request.vehicleAccessibilityFeatures() != null) {
+            profile.getVehicleAccessibilityFeatures().addAll(request.vehicleAccessibilityFeatures());
+        }
         transporterProfileRepository.save(profile);
         recordConsent(user);
 
@@ -216,14 +223,14 @@ public class AuthServiceImpl implements AuthService {
                 false, consent.getDocumentVersion(), consent.getAcceptedAt(), consent.getRevokedAt());
     }
 
-    /** Adiciona valores não-vazios (trim) ao conjunto, ignorando lista nula. */
+    /** Adiciona valores não-vazios ao conjunto (padronizados, preserva acentos), ignorando lista nula. */
     private void addCleaned(Set<String> target, List<String> values) {
         if (values == null) {
             return;
         }
         for (String value : values) {
             if (value != null && !value.isBlank()) {
-                target.add(value.trim());
+                target.add(TextNormalization.titleCase(value));
             }
         }
     }

@@ -28,6 +28,8 @@ import com.vanbora.api.modules.transporter.domain.Helper;
 import com.vanbora.api.modules.transporter.domain.PriceZone;
 import com.vanbora.api.modules.transporter.domain.Review;
 import com.vanbora.api.modules.transporter.domain.TransporterProfile;
+import com.vanbora.api.modules.transporter.domain.VehicleAccessibilityFeature;
+import com.vanbora.api.modules.transporter.domain.VehicleCharacteristic;
 import com.vanbora.api.modules.transporter.repository.TransporterProfileRepository;
 import com.vanbora.api.modules.transporter.service.ReviewService;
 import com.vanbora.api.modules.user.domain.User;
@@ -38,12 +40,14 @@ import com.vanbora.api.shared.enums.NoticePriority;
 import com.vanbora.api.shared.enums.PaymentStatus;
 import com.vanbora.api.shared.enums.RouteStopStatus;
 import com.vanbora.api.shared.enums.UserRole;
+import com.vanbora.api.shared.validation.TextNormalization;
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -73,6 +77,7 @@ public class DataSeeder {
     @Bean
     ApplicationRunner seedDemoData(
             @Value("${vanbora.seed-demo-data:true}") boolean enabled,
+            org.springframework.transaction.PlatformTransactionManager transactionManager,
             UserRepository userRepository,
             GuardianProfileRepository guardianRepository,
             TransporterProfileRepository transporterRepository,
@@ -100,6 +105,11 @@ public class DataSeeder {
                 backfillNotices(noticeRepository);
                 backfillSchools(schoolRepository);
                 backfillSchoolRefs(schoolRepository, dependentRepository);
+                // Precisa de uma transação aberta: acessa coleções LAZY (schools/neighborhoods)
+                // que a leitura de findAll() sozinha não inicializa.
+                new org.springframework.transaction.support.TransactionTemplate(transactionManager)
+                        .executeWithoutResult(status ->
+                                backfillServiceAreaNormalization(transporterRepository, schoolRepository));
                 seedSchoolAccount(userRepository, schoolRepository, passwordEncoder.encode(DEFAULT_PASSWORD));
                 // Recalcula média/contagem reais a partir das avaliações (corrige valores fixos antigos).
                 transporterRepository.findAll().forEach(reviewService::recompute);
@@ -125,6 +135,13 @@ public class DataSeeder {
                     Set.of("Jardins", "Moema"));
             addPriceZone(roberto, "Standard", "FIAP School", new BigDecimal("380.00"),
                     Set.of("Saúde", "Ipiranga"));
+            roberto.getVehicleCharacteristics().addAll(Set.of(
+                    VehicleCharacteristic.AIR_CONDITIONING,
+                    VehicleCharacteristic.SEATBELT_ALL_SEATS,
+                    VehicleCharacteristic.FREQUENT_SANITIZATION,
+                    VehicleCharacteristic.CHILD_LOCK_WINDOWS));
+            roberto.getVehicleAccessibilityFeatures().add(
+                    VehicleAccessibilityFeature.TRANSPORTS_STUDENTS_WITH_DISABILITY);
             // Posição inicial do transportador (será sobrescrita pelo GPS do app).
             roberto.setCurrentLatitude(ROBERTO_START_LAT);
             roberto.setCurrentLongitude(ROBERTO_START_LON);
@@ -504,6 +521,42 @@ public class DataSeeder {
         stop.setLatitude(latitude);
         stop.setLongitude(longitude);
         return stop;
+    }
+
+    /**
+     * Padroniza (Title Case, preserva acentos) escolas/bairros já cadastrados antes da
+     * normalização entrar em vigor. Idempotente — roda a cada boot, sem custo em bancos já
+     * normalizados. Não funde registros diferentes do catálogo de escolas (ids distintos);
+     * apenas renomeia. Ver TextNormalization.titleCase.
+     */
+    private void backfillServiceAreaNormalization(
+            TransporterProfileRepository transporterRepository, SchoolRepository schoolRepository) {
+        for (TransporterProfile t : transporterRepository.findAll()) {
+            Set<String> normalizedSchools = new LinkedHashSet<>();
+            for (String s : t.getSchools()) {
+                normalizedSchools.add(TextNormalization.titleCase(s));
+            }
+            Set<String> normalizedNeighborhoods = new LinkedHashSet<>();
+            for (String n : t.getNeighborhoods()) {
+                normalizedNeighborhoods.add(TextNormalization.titleCase(n));
+            }
+            boolean changed = !normalizedSchools.equals(t.getSchools())
+                    || !normalizedNeighborhoods.equals(t.getNeighborhoods());
+            if (changed) {
+                t.getSchools().clear();
+                t.getSchools().addAll(normalizedSchools);
+                t.getNeighborhoods().clear();
+                t.getNeighborhoods().addAll(normalizedNeighborhoods);
+                transporterRepository.save(t);
+            }
+        }
+        for (School school : schoolRepository.findAll()) {
+            String normalized = TextNormalization.titleCase(school.getName());
+            if (!normalized.equals(school.getName())) {
+                school.setName(normalized);
+                schoolRepository.save(school);
+            }
+        }
     }
 
     /**

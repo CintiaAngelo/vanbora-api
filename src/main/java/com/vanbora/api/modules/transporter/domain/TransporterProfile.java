@@ -7,10 +7,13 @@ import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -143,4 +146,28 @@ public class TransporterProfile extends BaseEntity {
 
     @OneToMany(mappedBy = "transporter", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Review> reviews = new ArrayList<>();
+
+    /**
+     * Fotos do veículo, na ordem de exibição (índice 0 = foto principal). Máximo de 3,
+     * validado na camada de serviço. {@code @OrderColumn} preserva a posição no banco.
+     */
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "transporter_vehicle_photos", joinColumns = @JoinColumn(name = "transporter_id"))
+    @OrderColumn(name = "position")
+    @Column(name = "url", length = 512)
+    private List<String> vehiclePhotoUrls = new ArrayList<>();
+
+    /** Recursos/opcionais estruturados do veículo (sem texto livre). */
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "transporter_vehicle_characteristics", joinColumns = @JoinColumn(name = "transporter_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "characteristic")
+    private Set<VehicleCharacteristic> vehicleCharacteristics = new LinkedHashSet<>();
+
+    /** Recursos de acessibilidade estruturados do veículo (independentes das características gerais). */
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "transporter_vehicle_accessibility", joinColumns = @JoinColumn(name = "transporter_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "feature")
+    private Set<VehicleAccessibilityFeature> vehicleAccessibilityFeatures = new LinkedHashSet<>();
 }

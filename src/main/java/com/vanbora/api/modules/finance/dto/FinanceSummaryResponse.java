@@ -20,7 +20,9 @@ public record FinanceSummaryResponse(
         List<MonthlyRevenue> monthlyRevenue,
         PeriodComparison comparison,
         /** Soma de monthlyFee das matrículas ativas — quanto entra por mês se nada mudar. */
-        BigDecimal recurringMonthlyRevenue
+        BigDecimal recurringMonthlyRevenue,
+        /** Receita recebida x despesas dos últimos 6 meses corridos (gráfico da Visão Geral). */
+        List<MonthlyTrend> monthlyTrend
 ) {
     /** Total gasto em uma categoria. */
     public record CategoryTotal(String category, BigDecimal total) {}
@@ -36,6 +38,9 @@ public record FinanceSummaryResponse(
 
     /** Receita recebida em um mês (rótulo curto + valor). */
     public record MonthlyRevenue(String label, BigDecimal value) {}
+
+    /** Receita recebida x despesas (gastos + combustível) em um dos últimos 6 meses. */
+    public record MonthlyTrend(String label, BigDecimal received, BigDecimal expenses) {}
 
     /**
      * Comparação com o período imediatamente anterior (mesmo tamanho). *ChangePct é null

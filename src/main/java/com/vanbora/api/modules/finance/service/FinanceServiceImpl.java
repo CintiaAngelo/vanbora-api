@@ -17,6 +17,7 @@ import com.vanbora.api.modules.finance.dto.FinanceSummaryResponse.Consumption;
 import com.vanbora.api.modules.finance.dto.FinanceSummaryResponse.Goal;
 import com.vanbora.api.modules.finance.dto.FinanceSummaryResponse.Maintenance;
 import com.vanbora.api.modules.finance.dto.FinanceSummaryResponse.MonthlyRevenue;
+import com.vanbora.api.modules.finance.dto.FinanceSummaryResponse.MonthlyTrend;
 import com.vanbora.api.modules.finance.dto.FinanceSummaryResponse.PeriodComparison;
 import com.vanbora.api.modules.finance.dto.FuelEntryResponse;
 import com.vanbora.api.modules.enrollment.domain.Enrollment;
@@ -113,6 +114,8 @@ public class FinanceServiceImpl implements FinanceService {
                 .map(Enrollment::getMonthlyFee)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        List<ManualRevenue> manualRevenue = manualRevenueRepository.findByTransporterId(id);
+
         return new FinanceSummaryResponse(
                 received, pending, overdue, expensesTotal, balance,
                 round1(kmToday), round1(kmPeriod), round1(kmTotal),
@@ -120,9 +123,10 @@ public class FinanceServiceImpl implements FinanceService {
                 consumption(fuel, kmPeriod),
                 goal(t, payments),
                 maintenance(t, kmTotal),
-                monthlyRevenue(payments, manualRevenueRepository.findByTransporterId(id)),
+                monthlyRevenue(payments, manualRevenue),
                 previousPeriodComparison(id, payments, start, end, received, expensesTotal, kmPeriod),
-                recurringMonthlyRevenue);
+                recurringMonthlyRevenue,
+                monthlyTrend(id, payments, manualRevenue));
     }
 
     @Override
@@ -369,6 +373,44 @@ public class FinanceServiceImpl implements FinanceService {
             BigDecimal value = paidByMonth.getOrDefault(key, BigDecimal.ZERO)
                     .add(manualByMonth.getOrDefault(key, BigDecimal.ZERO));
             result.add(new MonthlyRevenue(monthLabel(key), value));
+        }
+        return result;
+    }
+
+    /**
+     * Receita recebida x despesas (gastos + combustível) dos últimos 6 meses corridos
+     * (mês atual incluído) — para o gráfico "Receita x Despesas" da Visão Geral.
+     * Independente do período (from/to) pedido em getSummary. Receita agrupada por
+     * referenceMonth (mesma convenção de {@link #monthlyRevenue}); despesas pela data
+     * de lançamento/abastecimento.
+     */
+    private List<MonthlyTrend> monthlyTrend(Long transporterId, List<Payment> payments, List<ManualRevenue> manual) {
+        YearMonth currentMonth = YearMonth.now();
+        YearMonth startMonth = currentMonth.minusMonths(5);
+        LocalDate rangeStart = startMonth.atDay(1);
+        LocalDate rangeEnd = currentMonth.atEndOfMonth();
+
+        Map<String, BigDecimal> receivedByMonth = payments.stream()
+                .filter(p -> p.getStatus() == PaymentStatus.PAID)
+                .collect(Collectors.groupingBy(Payment::getReferenceMonth,
+                        Collectors.reducing(BigDecimal.ZERO, Payment::getAmount, BigDecimal::add)));
+        Map<String, BigDecimal> manualByMonth = manual.stream()
+                .collect(Collectors.toMap(ManualRevenue::getReferenceMonth, ManualRevenue::getAmount, BigDecimal::add));
+
+        Map<String, BigDecimal> expensesByMonth = new LinkedHashMap<>();
+        expenseRepository.findByTransporterIdAndDateBetweenOrderByDateDesc(transporterId, rangeStart, rangeEnd)
+                .forEach(e -> expensesByMonth.merge(
+                        YearMonth.from(e.getDate()).toString(), e.getAmount(), BigDecimal::add));
+        fuelRepository.findByTransporterIdAndDateBetweenOrderByDateDesc(transporterId, rangeStart, rangeEnd)
+                .forEach(f -> expensesByMonth.merge(
+                        YearMonth.from(f.getDate()).toString(), f.getAmount(), BigDecimal::add));
+
+        List<MonthlyTrend> result = new ArrayList<>();
+        for (int i = 5; i >= 0; i--) {
+            String key = currentMonth.minusMonths(i).toString();
+            BigDecimal received = receivedByMonth.getOrDefault(key, BigDecimal.ZERO)
+                    .add(manualByMonth.getOrDefault(key, BigDecimal.ZERO));
+            result.add(new MonthlyTrend(monthLabel(key), received, expensesByMonth.getOrDefault(key, BigDecimal.ZERO)));
         }
         return result;
     }

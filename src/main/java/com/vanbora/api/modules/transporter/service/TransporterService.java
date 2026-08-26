@@ -9,6 +9,7 @@ import com.vanbora.api.modules.transporter.dto.TransporterSummaryResponse;
 import com.vanbora.api.modules.transporter.dto.UpdateHelperRequest;
 import com.vanbora.api.modules.transporter.dto.UpdatePricingRequest;
 import com.vanbora.api.modules.transporter.dto.UpdateServiceAreaRequest;
+import com.vanbora.api.modules.transporter.dto.UpdateVehicleCharacteristicsRequest;
 import com.vanbora.api.modules.transporter.dto.UpdateVehicleRequest;
 import java.util.List;
 import org.springframework.web.multipart.MultipartFile;
@@ -40,6 +41,23 @@ public interface TransporterService {
     TransporterProfileResponse updateBio(Long userId, String bio);
 
     TransporterProfileResponse setMyPhoto(Long userId, MultipartFile file);
+
+    // ----- Fotos e características do veículo -----
+
+    /** Adiciona uma foto do veículo ao final da lista (máx. 3). */
+    TransporterProfileResponse addVehiclePhoto(Long userId, MultipartFile file);
+
+    /** Substitui a foto na posição informada, mantendo a ordem. */
+    TransporterProfileResponse replaceVehiclePhoto(Long userId, int index, MultipartFile file);
+
+    /** Remove a foto na posição informada; as seguintes sobem uma posição. */
+    TransporterProfileResponse deleteVehiclePhoto(Long userId, int index);
+
+    /** Reordena as fotos do veículo (índice 0 passa a ser a principal). */
+    TransporterProfileResponse reorderVehiclePhotos(Long userId, List<Integer> newOrder);
+
+    /** Substitui por completo as características e a acessibilidade do veículo. */
+    TransporterProfileResponse updateVehicleCharacteristics(Long userId, UpdateVehicleCharacteristicsRequest request);
 
     // ----- Ajudantes -----
 

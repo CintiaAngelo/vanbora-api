@@ -19,7 +19,10 @@ public record TransporterDetailResponse(
         BigDecimal monthlyFee,
         boolean acceptsProposals,
         List<HelperResponse> helpers,
-        List<ReviewResponse> reviews
+        List<ReviewResponse> reviews,
+        List<String> vehiclePhotoUrls,
+        List<String> vehicleCharacteristics,
+        List<String> vehicleAccessibilityFeatures
 ) {
     public static TransporterDetailResponse from(
             TransporterProfile t, List<HelperResponse> helpers, List<ReviewResponse> reviews) {
@@ -37,6 +40,9 @@ public record TransporterDetailResponse(
                 t.getBaseMonthlyFee(),
                 t.isAcceptsProposals(),
                 helpers,
-                reviews);
+                reviews,
+                List.copyOf(t.getVehiclePhotoUrls()),
+                t.getVehicleCharacteristics().stream().map(Enum::name).toList(),
+                t.getVehicleAccessibilityFeatures().stream().map(Enum::name).toList());
     }
 }

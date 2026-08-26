@@ -6,6 +6,7 @@ import com.vanbora.api.modules.school.dto.SchoolResponse;
 import com.vanbora.api.modules.school.repository.SchoolRepository;
 import com.vanbora.api.shared.exception.BusinessException;
 import com.vanbora.api.shared.geo.GeocodingService;
+import com.vanbora.api.shared.validation.TextNormalization;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -39,7 +40,7 @@ public class SchoolServiceImpl implements SchoolService {
         if (!StringUtils.hasText(request.name())) {
             throw new BusinessException("Informe o nome da escola.");
         }
-        String name = request.name().trim();
+        String name = TextNormalization.titleCase(request.name());
         String cep = request.cep() == null ? null : request.cep().trim();
 
         // Reaproveita se já houver a mesma escola (mesmo nome + CEP).

@@ -14,6 +14,7 @@ import com.vanbora.api.modules.transporter.dto.TransporterSummaryResponse;
 import com.vanbora.api.modules.transporter.dto.UpdateHelperRequest;
 import com.vanbora.api.modules.transporter.dto.UpdatePricingRequest;
 import com.vanbora.api.modules.transporter.dto.UpdateServiceAreaRequest;
+import com.vanbora.api.modules.transporter.dto.UpdateVehicleCharacteristicsRequest;
 import com.vanbora.api.modules.transporter.dto.UpdateVehicleRequest;
 import com.vanbora.api.modules.transporter.repository.HelperRepository;
 import com.vanbora.api.modules.transporter.repository.ReviewRepository;
@@ -21,6 +22,7 @@ import com.vanbora.api.modules.transporter.repository.TransporterProfileReposito
 import com.vanbora.api.shared.exception.BusinessException;
 import com.vanbora.api.shared.exception.ResourceNotFoundException;
 import com.vanbora.api.shared.validation.DocumentValidations;
+import com.vanbora.api.shared.validation.TextNormalization;
 import com.vanbora.api.shared.storage.StorageService;
 import java.text.Collator;
 import java.util.Comparator;
@@ -31,6 +33,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -231,6 +234,79 @@ public class TransporterServiceImpl implements TransporterService {
         return profileResponse(transporter);
     }
 
+    // ----- Fotos e características do veículo -----
+
+    private static final int MAX_VEHICLE_PHOTOS = 3;
+
+    @Override
+    @Transactional
+    public TransporterProfileResponse addVehiclePhoto(Long userId, MultipartFile file) {
+        TransporterProfile transporter = findByUserOrThrow(userId);
+        List<String> photos = transporter.getVehiclePhotoUrls();
+        if (photos.size() >= MAX_VEHICLE_PHOTOS) {
+            throw new BusinessException("Limite de " + MAX_VEHICLE_PHOTOS + " fotos do veículo atingido.");
+        }
+        photos.add(storageService.store(file, "vehicles"));
+        return profileResponse(transporterRepository.save(transporter));
+    }
+
+    @Override
+    @Transactional
+    public TransporterProfileResponse replaceVehiclePhoto(Long userId, int index, MultipartFile file) {
+        TransporterProfile transporter = findByUserOrThrow(userId);
+        List<String> photos = transporter.getVehiclePhotoUrls();
+        if (index < 0 || index >= photos.size()) {
+            throw new BusinessException("Posição de foto inválida.");
+        }
+        String previous = photos.get(index);
+        photos.set(index, storageService.store(file, "vehicles"));
+        transporterRepository.save(transporter);
+        storageService.delete(previous);
+        return profileResponse(transporter);
+    }
+
+    @Override
+    @Transactional
+    public TransporterProfileResponse deleteVehiclePhoto(Long userId, int index) {
+        TransporterProfile transporter = findByUserOrThrow(userId);
+        List<String> photos = transporter.getVehiclePhotoUrls();
+        if (index < 0 || index >= photos.size()) {
+            throw new BusinessException("Posição de foto inválida.");
+        }
+        String removed = photos.remove(index);
+        transporterRepository.save(transporter);
+        storageService.delete(removed);
+        return profileResponse(transporter);
+    }
+
+    @Override
+    @Transactional
+    public TransporterProfileResponse reorderVehiclePhotos(Long userId, List<Integer> newOrder) {
+        TransporterProfile transporter = findByUserOrThrow(userId);
+        List<String> photos = transporter.getVehiclePhotoUrls();
+        if (newOrder == null || newOrder.size() != photos.size()
+                || !new HashSet<>(newOrder).equals(
+                        IntStream.range(0, photos.size()).boxed().collect(Collectors.toSet()))) {
+            throw new BusinessException("Ordem de fotos inválida.");
+        }
+        List<String> reordered = newOrder.stream().map(photos::get).collect(Collectors.toList());
+        photos.clear();
+        photos.addAll(reordered);
+        return profileResponse(transporterRepository.save(transporter));
+    }
+
+    @Override
+    @Transactional
+    public TransporterProfileResponse updateVehicleCharacteristics(
+            Long userId, UpdateVehicleCharacteristicsRequest request) {
+        TransporterProfile transporter = findByUserOrThrow(userId);
+        transporter.setVehicleCharacteristics(request.characteristics() == null
+                ? new LinkedHashSet<>() : new LinkedHashSet<>(request.characteristics()));
+        transporter.setVehicleAccessibilityFeatures(request.accessibilityFeatures() == null
+                ? new LinkedHashSet<>() : new LinkedHashSet<>(request.accessibilityFeatures()));
+        return profileResponse(transporterRepository.save(transporter));
+    }
+
     // ----- Ajudantes -----
 
     @Override
@@ -313,11 +389,12 @@ public class TransporterServiceImpl implements TransporterService {
                 .toList();
     }
 
+    /** Limpa, colapsa espaços e padroniza a capitalização (preserva acentos) — evita duplicados por caixa. */
     private Set<String> cleanSet(List<String> values) {
         Set<String> result = new LinkedHashSet<>();
         for (String value : values) {
             if (StringUtils.hasText(value)) {
-                result.add(value.trim());
+                result.add(TextNormalization.titleCase(value));
             }
         }
         return result;

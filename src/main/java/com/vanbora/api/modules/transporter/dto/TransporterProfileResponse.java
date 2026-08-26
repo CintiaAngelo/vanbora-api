@@ -22,7 +22,10 @@ public record TransporterProfileResponse(
         List<PriceZoneResponse> priceZones,
         List<HelperResponse> helpers,
         String contractTemplate,
-        String bio
+        String bio,
+        List<String> vehiclePhotoUrls,
+        List<String> vehicleCharacteristics,
+        List<String> vehicleAccessibilityFeatures
 ) {
     public static TransporterProfileResponse from(TransporterProfile t, List<HelperResponse> helpers) {
         return new TransporterProfileResponse(
@@ -42,6 +45,9 @@ public record TransporterProfileResponse(
                 t.getPriceZones().stream().map(PriceZoneResponse::from).toList(),
                 helpers,
                 t.getContractTemplate(),
-                t.getBio());
+                t.getBio(),
+                List.copyOf(t.getVehiclePhotoUrls()),
+                t.getVehicleCharacteristics().stream().map(Enum::name).toList(),
+                t.getVehicleAccessibilityFeatures().stream().map(Enum::name).toList());
     }
 }

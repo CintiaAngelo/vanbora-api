@@ -7,12 +7,15 @@ import com.vanbora.api.modules.transporter.dto.TransporterSummaryResponse;
 import com.vanbora.api.modules.transporter.dto.UpdateContractTemplateRequest;
 import com.vanbora.api.modules.transporter.dto.UpdatePricingRequest;
 import com.vanbora.api.modules.transporter.dto.UpdateServiceAreaRequest;
+import com.vanbora.api.modules.transporter.dto.UpdateVehicleCharacteristicsRequest;
 import com.vanbora.api.modules.transporter.dto.UpdateVehicleRequest;
+import com.vanbora.api.modules.transporter.dto.VehiclePhotoOrderRequest;
 import com.vanbora.api.modules.transporter.service.TransporterService;
 import com.vanbora.api.security.CurrentUserProvider;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -106,6 +109,43 @@ public class TransporterController {
     @PreAuthorize("hasRole('TRANSPORTER')")
     public TransporterProfileResponse uploadPhoto(@RequestParam("file") MultipartFile file) {
         return transporterService.setMyPhoto(currentUserProvider.requireUserId(), file);
+    }
+
+    /** Adiciona uma foto do veículo (máx. 3; a primeira é a principal). */
+    @PostMapping("/me/vehicle-photos")
+    @PreAuthorize("hasRole('TRANSPORTER')")
+    public TransporterProfileResponse addVehiclePhoto(@RequestParam("file") MultipartFile file) {
+        return transporterService.addVehiclePhoto(currentUserProvider.requireUserId(), file);
+    }
+
+    /** Substitui a foto do veículo na posição informada (0 = principal). */
+    @PutMapping("/me/vehicle-photos/{index}")
+    @PreAuthorize("hasRole('TRANSPORTER')")
+    public TransporterProfileResponse replaceVehiclePhoto(
+            @PathVariable int index, @RequestParam("file") MultipartFile file) {
+        return transporterService.replaceVehiclePhoto(currentUserProvider.requireUserId(), index, file);
+    }
+
+    /** Remove a foto do veículo na posição informada. */
+    @DeleteMapping("/me/vehicle-photos/{index}")
+    @PreAuthorize("hasRole('TRANSPORTER')")
+    public TransporterProfileResponse deleteVehiclePhoto(@PathVariable int index) {
+        return transporterService.deleteVehiclePhoto(currentUserProvider.requireUserId(), index);
+    }
+
+    /** Reordena as fotos do veículo. */
+    @PutMapping("/me/vehicle-photos/order")
+    @PreAuthorize("hasRole('TRANSPORTER')")
+    public TransporterProfileResponse reorderVehiclePhotos(@RequestBody VehiclePhotoOrderRequest request) {
+        return transporterService.reorderVehiclePhotos(currentUserProvider.requireUserId(), request.order());
+    }
+
+    /** Substitui as características e a acessibilidade do veículo. */
+    @PutMapping("/me/vehicle-characteristics")
+    @PreAuthorize("hasRole('TRANSPORTER')")
+    public TransporterProfileResponse updateVehicleCharacteristics(
+            @RequestBody UpdateVehicleCharacteristicsRequest request) {
+        return transporterService.updateVehicleCharacteristics(currentUserProvider.requireUserId(), request);
     }
 
     @GetMapping("/{id}")
