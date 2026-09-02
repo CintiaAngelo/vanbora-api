@@ -23,10 +23,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final AppUserDetailsService userDetailsService;
+    private final TokenRevocationService tokenRevocationService;
 
-    public JwtAuthenticationFilter(JwtService jwtService, AppUserDetailsService userDetailsService) {
+    public JwtAuthenticationFilter(JwtService jwtService,
+                                   AppUserDetailsService userDetailsService,
+                                   TokenRevocationService tokenRevocationService) {
         this.jwtService = jwtService;
         this.userDetailsService = userDetailsService;
+        this.tokenRevocationService = tokenRevocationService;
     }
 
     @Override
@@ -38,6 +42,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = resolveToken(request);
 
         if (token != null && jwtService.isValid(token)
+                && !tokenRevocationService.isRevoked(jwtService.extractTokenId(token))
                 && SecurityContextHolder.getContext().getAuthentication() == null) {
             String email = jwtService.extractEmail(token);
             UserDetails userDetails = userDetailsService.loadUserByUsername(email);

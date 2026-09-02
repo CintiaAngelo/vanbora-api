@@ -7,7 +7,11 @@ import com.vanbora.api.modules.auth.dto.UpdateOnboardingRequest;
 import com.vanbora.api.modules.auth.service.AuthService;
 import com.vanbora.api.modules.notification.PushNotificationService;
 import com.vanbora.api.security.CurrentUserProvider;
+import com.vanbora.api.security.jwt.JwtService;
+import com.vanbora.api.security.jwt.TokenRevocationService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,13 +32,19 @@ public class AccountController {
     private final AuthService authService;
     private final PushNotificationService pushNotificationService;
     private final CurrentUserProvider currentUserProvider;
+    private final JwtService jwtService;
+    private final TokenRevocationService tokenRevocationService;
 
     public AccountController(AuthService authService,
                             PushNotificationService pushNotificationService,
-                            CurrentUserProvider currentUserProvider) {
+                            CurrentUserProvider currentUserProvider,
+                            JwtService jwtService,
+                            TokenRevocationService tokenRevocationService) {
         this.authService = authService;
         this.pushNotificationService = pushNotificationService;
         this.currentUserProvider = currentUserProvider;
+        this.jwtService = jwtService;
+        this.tokenRevocationService = tokenRevocationService;
     }
 
     @PostMapping("/password")
@@ -74,6 +84,29 @@ public class AccountController {
     @PutMapping("/onboarding")
     public ResponseEntity<Void> updateOnboarding(@Valid @RequestBody UpdateOnboardingRequest request) {
         authService.updateOnboardingProgress(currentUserProvider.requireUserId(), request.seenVersion());
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Encerra a sessão invalidando o token no servidor.
+     *
+     * Apagar o token no aparelho não basta: um JWT vale até expirar, então uma cópia
+     * feita antes do logout continuaria aceita. Aqui o token entra na denylist e é
+     * recusado a partir da próxima requisição — inclusive no WebSocket do chat.
+     * Só este token é revogado; as sessões do usuário em outros aparelhos seguem.
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(HttpServletRequest request) {
+        String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+        if (header != null && header.startsWith("Bearer ")) {
+            String token = header.substring("Bearer ".length());
+            if (jwtService.isValid(token)) {
+                tokenRevocationService.revoke(
+                        jwtService.extractTokenId(token),
+                        jwtService.extractExpiration(token),
+                        currentUserProvider.requireUserId());
+            }
+        }
         return ResponseEntity.noContent().build();
     }
 }

@@ -4,7 +4,6 @@ import com.vanbora.api.modules.transporter.domain.VehicleAccessibilityFeature;
 import com.vanbora.api.modules.transporter.domain.VehicleCharacteristic;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -12,7 +11,14 @@ import java.util.List;
 public record RegisterTransporterRequest(
         @NotBlank String name,
         @NotBlank @Email String email,
-        @NotBlank @Size(min = 6, message = "A senha deve ter ao menos 6 caracteres") String password,
+        /**
+         * Senha. Obrigatória (mínimo 6 caracteres) no cadastro comum; ignorada
+         * quando vem um {@code socialTicket} — a validação é feita no serviço,
+         * porque depende do outro campo.
+         */
+        String password,
+        /** Ticket do login social (Google/Facebook), quando o cadastro veio de lá. */
+        String socialTicket,
         @NotBlank String phone,
         String document,
         String cnh,

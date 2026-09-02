@@ -1,9 +1,15 @@
 package com.vanbora.api.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.vanbora.api.modules.auth.social.Auth0Properties;
 import com.vanbora.api.security.AppUserDetailsService;
+import com.vanbora.api.security.RestAuthenticationEntryPoint;
 import com.vanbora.api.security.jwt.JwtAuthenticationFilter;
 import com.vanbora.api.security.jwt.JwtProperties;
+import com.vanbora.api.security.ratelimit.RateLimitFilter;
+import com.vanbora.api.security.ratelimit.RateLimitProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -17,6 +23,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.logout.LogoutFilter;
 import org.springframework.web.cors.CorsConfigurationSource;
 
 /**
@@ -25,7 +32,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
  */
 @Configuration
 @EnableMethodSecurity
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({JwtProperties.class, RateLimitProperties.class, Auth0Properties.class})
 public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = {
@@ -52,17 +59,46 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http,
+                                           RateLimitFilter rateLimitFilter,
+                                           RestAuthenticationEntryPoint authenticationEntryPoint)
+            throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // Token ausente/expirado/revogado responde 401 (sessão acabou), e não
+                // 403 — que significa "logado, mas sem permissão".
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(authenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .anyRequest().authenticated())
+                // O rate limit entra logo depois do CORS e antes de qualquer
+                // autenticação: recusar uma rajada de requisições inválidas precisa
+                // ser barato (sem ida ao banco para carregar o usuário do token).
+                .addFilterBefore(rateLimitFilter, LogoutFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    @Bean
+    public RateLimitFilter rateLimitFilter(RateLimitProperties properties, ObjectMapper objectMapper) {
+        return new RateLimitFilter(properties, objectMapper);
+    }
+
+    /**
+     * O Boot registra automaticamente todo bean do tipo Filter no chain de servlets,
+     * o que faria o rate limit contar duas vezes a mesma requisição (uma ali, outra
+     * no chain do Spring Security). Aqui ele é desligado do chain de servlets — vale
+     * apenas o registro explícito feito em {@link #filterChain}.
+     */
+    @Bean
+    public FilterRegistrationBean<RateLimitFilter> rateLimitFilterRegistration(
+            RateLimitFilter filter) {
+        FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     @Bean

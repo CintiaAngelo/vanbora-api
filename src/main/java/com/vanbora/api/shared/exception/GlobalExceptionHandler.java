@@ -34,6 +34,17 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.UNAUTHORIZED, "E-mail ou senha inválidos.", req, null);
     }
 
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<ApiError> handleUnauthorized(UnauthorizedException ex, HttpServletRequest req) {
+        return build(HttpStatus.UNAUTHORIZED, ex.getMessage(), req, null);
+    }
+
+    @ExceptionHandler(FeatureUnavailableException.class)
+    public ResponseEntity<ApiError> handleFeatureUnavailable(
+            FeatureUnavailableException ex, HttpServletRequest req) {
+        return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), req, null);
+    }
+
     @ExceptionHandler(TooManyAttemptsException.class)
     public ResponseEntity<ApiError> handleTooManyAttempts(TooManyAttemptsException ex, HttpServletRequest req) {
         return build(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), req, null);

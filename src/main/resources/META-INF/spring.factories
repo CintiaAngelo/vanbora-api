@@ -1,0 +1,5 @@
+# Roda antes de qualquer bean do contexto — é o único momento em que dá para
+# recusar a inicialização com uma mensagem legível, antes de o Hibernate tentar
+# conectar e sepultar a causa em stack trace.
+org.springframework.boot.env.EnvironmentPostProcessor=\
+com.vanbora.api.config.DatabaseCredentialsCheck

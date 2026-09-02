@@ -2,10 +2,19 @@ spring:
   application:
     name: vanbora-api
 
+  # Carrega o arquivo `.env` da pasta backend/ (ignorado pelo git) como fonte de
+  # propriedades. É o que permite tirar senha do repositório sem obrigar cada dev
+  # a configurar variáveis de ambiente na mão em cada IDE. `optional:` faz o
+  # arquivo ser dispensável — em produção as variáveis vêm do ambiente.
+  config:
+    import: optional:file:./.env[.properties]
+
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/vanbora?createDatabaseIfNotExist=true&serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true}
     username: ${DB_USERNAME:vanbora}
-    password: ${DB_PASSWORD:Vanbora@123}
+    # Sem default: uma senha de banco nunca deve ficar versionada no repositório.
+    # Defina DB_PASSWORD no ambiente (veja .env.example e o README).
+    password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   servlet:
@@ -45,6 +54,37 @@ vanbora:
     # Proteção contra força bruta no login (ver LoginAttemptService).
     max-attempts: ${VANBORA_LOGIN_MAX_ATTEMPTS:5}
     lockout-minutes: ${VANBORA_LOGIN_LOCKOUT_MINUTES:15}
+  # Rate limiting por IP (ver RateLimitFilter). Complementa o bloqueio por conta do
+  # LoginAttemptService: aquele protege UMA conta, este protege a API como um todo
+  # (ex.: password spraying, que tenta uma senha em milhares de contas diferentes).
+  rate-limit:
+    enabled: ${VANBORA_RATE_LIMIT_ENABLED:true}
+    # Endpoints de autenticação (login, cadastro, login social): estreito.
+    auth-requests-per-minute: ${VANBORA_RATE_LIMIT_AUTH:20}
+    # Escritas autenticadas (POST/PUT/PATCH/DELETE).
+    write-requests-per-minute: ${VANBORA_RATE_LIMIT_WRITE:120}
+    # Demais requisições da API.
+    default-requests-per-minute: ${VANBORA_RATE_LIMIT_DEFAULT:300}
+    # Confie no cabeçalho X-Forwarded-For apenas se a API estiver atrás de um proxy
+    # reverso confiável (nginx, ALB, Cloud Run). Ligado sem proxy, qualquer cliente
+    # forja o próprio IP e escapa do limite.
+    trust-forwarded-for: ${VANBORA_RATE_LIMIT_TRUST_PROXY:false}
+  # Login social via Auth0 (Google e Facebook). Sem `domain` configurado o recurso
+  # fica desligado e /api/auth/social responde 503 — o login por e-mail/senha segue
+  # funcionando normalmente.
+  #
+  # Só há valores públicos aqui: domínio do tenant e client id do app nativo (PKCE,
+  # aplicação pública). O client secret do Auth0 NÃO é usado nem deve ser colocado
+  # em nenhum dos dois projetos.
+  auth0:
+    domain: ${AUTH0_DOMAIN:}
+    # Audiences aceitas no id_token — normalmente o(s) client id(s) do app.
+    audience: ${AUTH0_AUDIENCE:}
+    # Cache das chaves públicas (JWKS) do Auth0.
+    jwks-cache-minutes: ${AUTH0_JWKS_CACHE_MINUTES:60}
+    # Validade do "ticket" de cadastro devolvido quando o e-mail social ainda não
+    # tem conta no VanBora (o app completa o cadastro escolhendo o perfil).
+    signup-ticket-minutes: ${AUTH0_SIGNUP_TICKET_MINUTES:30}
   # Popula dados de demonstração na primeira execução (banco vazio).
   seed-demo-data: ${VANBORA_SEED:true}
   # Link base usado nos e-mails (assinatura de contrato). Deep link do app por padrão.

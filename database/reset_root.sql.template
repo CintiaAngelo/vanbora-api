@@ -1,0 +1,28 @@
+-- =====================================================================
+--  VanBora — Reset da senha do root (MySQL 8) + setup da aplicação
+-- ---------------------------------------------------------------------
+--  TEMPLATE. Não é executado diretamente: `reset_root.ps1` substitui os
+--  marcadores pelas senhas informadas e grava o arquivo final em %TEMP%,
+--  que é apagado ao fim. Assim nenhuma senha fica versionada no repositório.
+--
+--  Aplicado pelo mysqld via --init-file (roda como root na inicialização):
+--    1) Redefine a senha do root (cobre @localhost, @127.0.0.1 e @%)
+--    2) Cria o banco `vanbora`
+--    3) Cria/atualiza o usuário da aplicação `vanbora`
+--
+--  IF EXISTS evita que o arquivo aborte a inicialização caso um dos hosts
+--  de root não exista nesta instalação.
+-- =====================================================================
+
+ALTER USER IF EXISTS 'root'@'localhost' IDENTIFIED BY '__ROOT_PASSWORD__';
+ALTER USER IF EXISTS 'root'@'127.0.0.1' IDENTIFIED BY '__ROOT_PASSWORD__';
+ALTER USER IF EXISTS 'root'@'%'         IDENTIFIED BY '__ROOT_PASSWORD__';
+
+CREATE DATABASE IF NOT EXISTS vanbora
+    CHARACTER SET utf8mb4
+    COLLATE utf8mb4_0900_ai_ci;
+
+CREATE USER IF NOT EXISTS 'vanbora'@'localhost' IDENTIFIED BY '__APP_PASSWORD__';
+ALTER  USER IF EXISTS     'vanbora'@'localhost' IDENTIFIED BY '__APP_PASSWORD__';
+GRANT ALL PRIVILEGES ON vanbora.* TO 'vanbora'@'localhost';
+FLUSH PRIVILEGES;

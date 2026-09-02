@@ -4,6 +4,7 @@ import com.vanbora.api.modules.chat.repository.ConversationRepository;
 import com.vanbora.api.security.AppUserDetails;
 import com.vanbora.api.security.AppUserDetailsService;
 import com.vanbora.api.security.jwt.JwtService;
+import com.vanbora.api.security.jwt.TokenRevocationService;
 import java.security.Principal;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -29,13 +30,16 @@ public class ChatChannelInterceptor implements ChannelInterceptor {
     private final JwtService jwtService;
     private final AppUserDetailsService userDetailsService;
     private final ConversationRepository conversationRepository;
+    private final TokenRevocationService tokenRevocationService;
 
     public ChatChannelInterceptor(JwtService jwtService,
                                   AppUserDetailsService userDetailsService,
-                                  ConversationRepository conversationRepository) {
+                                  ConversationRepository conversationRepository,
+                                  TokenRevocationService tokenRevocationService) {
         this.jwtService = jwtService;
         this.userDetailsService = userDetailsService;
         this.conversationRepository = conversationRepository;
+        this.tokenRevocationService = tokenRevocationService;
     }
 
     @Override
@@ -56,7 +60,8 @@ public class ChatChannelInterceptor implements ChannelInterceptor {
 
     private void authenticate(StompHeaderAccessor accessor) {
         String token = bearer(accessor.getFirstNativeHeader("Authorization"));
-        if (token == null || !jwtService.isValid(token)) {
+        if (token == null || !jwtService.isValid(token)
+                || tokenRevocationService.isRevoked(jwtService.extractTokenId(token))) {
             throw new MessagingException("Token de autenticação ausente ou inválido.");
         }
         AppUserDetails details =

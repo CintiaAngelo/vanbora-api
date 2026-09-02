@@ -17,6 +17,8 @@ import com.vanbora.api.modules.user.domain.UserConsent;
 import com.vanbora.api.modules.user.repository.OnboardingProgressRepository;
 import com.vanbora.api.modules.user.repository.UserConsentRepository;
 import com.vanbora.api.modules.user.repository.UserRepository;
+import com.vanbora.api.modules.auth.social.SignupTicketService;
+import com.vanbora.api.modules.auth.social.SocialIdentity;
 import com.vanbora.api.security.LoginAttemptService;
 import com.vanbora.api.security.jwt.JwtService;
 import com.vanbora.api.shared.enums.ConsentType;
@@ -27,7 +29,9 @@ import com.vanbora.api.shared.legal.LegalDocuments;
 import com.vanbora.api.shared.validation.DocumentValidations;
 import com.vanbora.api.shared.validation.TextNormalization;
 import java.math.BigDecimal;
+import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.List;
 import java.util.Set;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -41,6 +45,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AuthServiceImpl implements AuthService {
 
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
     private final UserRepository userRepository;
     private final UserConsentRepository userConsentRepository;
     private final OnboardingProgressRepository onboardingProgressRepository;
@@ -51,6 +57,7 @@ public class AuthServiceImpl implements AuthService {
     private final AuthenticationManager authenticationManager;
     private final GuardianAddressService guardianAddressService;
     private final LoginAttemptService loginAttemptService;
+    private final SignupTicketService signupTicketService;
 
     public AuthServiceImpl(
             UserRepository userRepository,
@@ -62,7 +69,8 @@ public class AuthServiceImpl implements AuthService {
             JwtService jwtService,
             AuthenticationManager authenticationManager,
             GuardianAddressService guardianAddressService,
-            LoginAttemptService loginAttemptService) {
+            LoginAttemptService loginAttemptService,
+            SignupTicketService signupTicketService) {
         this.userRepository = userRepository;
         this.userConsentRepository = userConsentRepository;
         this.onboardingProgressRepository = onboardingProgressRepository;
@@ -73,6 +81,7 @@ public class AuthServiceImpl implements AuthService {
         this.authenticationManager = authenticationManager;
         this.guardianAddressService = guardianAddressService;
         this.loginAttemptService = loginAttemptService;
+        this.signupTicketService = signupTicketService;
     }
 
     @Override
@@ -85,7 +94,8 @@ public class AuthServiceImpl implements AuthService {
         }
         ensureEmailAvailable(request.email());
 
-        User user = createUser(request.name(), request.email(), request.password(),
+        User user = createUser(request.name(), request.email(),
+                resolveCredential(request.password(), request.socialTicket(), request.email()),
                 request.phone(), UserRole.GUARDIAN);
         recordConsent(user);
 
@@ -116,7 +126,8 @@ public class AuthServiceImpl implements AuthService {
         }
         ensureEmailAvailable(request.email());
 
-        User user = createUser(request.name(), request.email(), request.password(),
+        User user = createUser(request.name(), request.email(),
+                resolveCredential(request.password(), request.socialTicket(), request.email()),
                 request.phone(), UserRole.TRANSPORTER);
 
         TransporterProfile profile = new TransporterProfile();
@@ -269,13 +280,49 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-    private User createUser(String name, String email, String rawPassword, String phone, UserRole role) {
+    /**
+     * Define como a conta será criada: com a senha digitada ou a partir de um login
+     * social já verificado.
+     *
+     * A senha não pode ser validada por anotação no DTO porque só é obrigatória
+     * quando NÃO há ticket social — é uma regra entre dois campos.
+     */
+    private Credential resolveCredential(String password, String socialTicket, String email) {
+        if (socialTicket != null && !socialTicket.isBlank()) {
+            SocialIdentity identity = signupTicketService.verify(socialTicket, email);
+            // Sem senha escolhida pelo usuário: guarda-se o hash de um valor aleatório
+            // que ninguém conhece (nem nós), então nenhuma senha digitada vai casar.
+            // Para passar a usar senha, a conta usa a recuperação de senha.
+            return new Credential(randomSecret(), identity.provider(), identity.subject());
+        }
+        if (password == null || password.isBlank()) {
+            throw new BusinessException("Informe uma senha para criar a conta.");
+        }
+        if (password.length() < 6) {
+            throw new BusinessException("A senha deve ter ao menos 6 caracteres.");
+        }
+        return new Credential(password, null, null);
+    }
+
+    private String randomSecret() {
+        byte[] bytes = new byte[32];
+        SECURE_RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    /** Como a conta se autentica: senha em texto a ser hasheada + vínculo social opcional. */
+    private record Credential(String rawPassword, String authProvider, String authSubject) {
+    }
+
+    private User createUser(String name, String email, Credential credential, String phone, UserRole role) {
         User user = new User();
         user.setName(name);
         user.setEmail(email);
-        user.setPasswordHash(passwordEncoder.encode(rawPassword));
+        user.setPasswordHash(passwordEncoder.encode(credential.rawPassword()));
         user.setPhone(phone);
         user.setRole(role);
+        user.setAuthProvider(credential.authProvider());
+        user.setAuthSubject(credential.authSubject());
         return userRepository.save(user);
     }
 
