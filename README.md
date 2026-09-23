@@ -59,8 +59,37 @@ A API sobe em `http://localhost:8080`. Documentação interativa:
 
 ## Logins de demonstração (senha: `123456`)
 
-- **Responsável:** `mariana@vanbora.com`
-- **Transportador:** `roberto@vanbora.com`
+- **Responsável:** `mariana@vanbora.com` — 3 filhos (um com transporte ativo, um com
+  contrato aguardando assinatura e um sem transportador), endereço geocodificado,
+  cartão salvo, histórico de mensalidades e 2 conversas.
+- **Transportador:** `roberto@vanbora.com` — 6 alunos, rota do dia com ETA, painel
+  financeiro com 6 meses de histórico, 6 conversas, 5 avisos e 2 solicitações pendentes.
+- **Escola:** `secretaria@objetivo.com.br` (painel de gestão do Colégio Objetivo).
+
+Há ainda 4 transportadores concorrentes (`fernanda@`, `carlos@`, `patricia@`,
+`anderson@`, `simone@vanbora.com`) e 5 responsáveis (`juliana@`, `marcos@`, `renata@`,
+`thiago@`, `camila@vanbora.com`), todos com a mesma senha — usados para a tela de busca
+e para as conversas.
+
+### Fotos dos dados de demonstração
+
+O seed aponta as fotos (perfis, dependentes, ajudantes, veículos e imagens no chat) para
+`/uploads/seed/…`. Como `uploads/` é mídia de runtime e não vai para o git, baixe-as uma
+vez antes de semear o banco:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\database\download_seed_media.ps1
+```
+
+### Repopular do zero
+
+O seed só roda com o banco vazio. Para regerar (dados relativos a "hoje", então nunca
+ficam desatualizados), apague as tabelas e suba a API de novo:
+
+```sql
+-- no MySQL Workbench, conectado ao schema `vanbora`
+DROP DATABASE vanbora; CREATE DATABASE vanbora CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+```
 
 ## Arquitetura
 
