@@ -22,6 +22,8 @@ target/
 
 # Uploaded media (runtime storage, not source)
 uploads/
+# Private uploads (safety checklist photos — never served publicly)
+uploads-private/
 
 # OS
 .DS_Store

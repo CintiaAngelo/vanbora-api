@@ -4,5 +4,7 @@ package com.vanbora.api.shared.enums;
 public enum UserRole {
     GUARDIAN,
     TRANSPORTER,
-    SCHOOL
+    SCHOOL,
+    /** Monitor de transporte escolar: conta criada e gerida por um transportador. */
+    MONITOR
 }

@@ -1,5 +1,7 @@
 package com.vanbora.api.modules.transporter.service;
 
+import com.vanbora.api.modules.monitor.dto.MonitorAccessRequest;
+import com.vanbora.api.modules.monitor.service.MonitorAccountService;
 import com.vanbora.api.modules.transporter.domain.Helper;
 import com.vanbora.api.modules.transporter.domain.PriceZone;
 import com.vanbora.api.modules.transporter.domain.TransporterProfile;
@@ -48,16 +50,19 @@ public class TransporterServiceImpl implements TransporterService {
     private final ReviewRepository reviewRepository;
     private final HelperRepository helperRepository;
     private final StorageService storageService;
+    private final MonitorAccountService monitorAccountService;
 
     public TransporterServiceImpl(
             TransporterProfileRepository transporterRepository,
             ReviewRepository reviewRepository,
             HelperRepository helperRepository,
-            StorageService storageService) {
+            StorageService storageService,
+            MonitorAccountService monitorAccountService) {
         this.transporterRepository = transporterRepository;
         this.reviewRepository = reviewRepository;
         this.helperRepository = helperRepository;
         this.storageService = storageService;
+        this.monitorAccountService = monitorAccountService;
     }
 
     @Override
@@ -313,7 +318,7 @@ public class TransporterServiceImpl implements TransporterService {
     public List<HelperResponse> listMyHelpers(Long userId) {
         TransporterProfile transporter = findByUserOrThrow(userId);
         return helperRepository.findByTransporterId(transporter.getId()).stream()
-                .map(HelperResponse::from)
+                .map(HelperResponse::forOwner)
                 .toList();
     }
 
@@ -326,7 +331,12 @@ public class TransporterServiceImpl implements TransporterService {
         helper.setName(request.name().trim());
         helper.setRole(request.role().trim());
         helper.setActive(true);
-        return HelperResponse.from(helperRepository.save(helper));
+        helper = helperRepository.save(helper);
+        if (request.access() != null) {
+            // Mesma transação: se o acesso for inválido (ex.: e-mail em uso), nada é criado.
+            monitorAccountService.grantOrUpdateAccess(helper, request.access());
+        }
+        return HelperResponse.forOwner(helper);
     }
 
     @Override
@@ -338,7 +348,10 @@ public class TransporterServiceImpl implements TransporterService {
         if (request.active() != null) {
             helper.setActive(request.active());
         }
-        return HelperResponse.from(helperRepository.save(helper));
+        helperRepository.save(helper);
+        // Nome/situação refletem na conta do monitor; inativo perde o acesso na hora.
+        monitorAccountService.syncWithHelper(helper);
+        return HelperResponse.forOwner(helper);
     }
 
     @Override
@@ -349,7 +362,7 @@ public class TransporterServiceImpl implements TransporterService {
         helper.setPhotoUrl(storageService.store(file, "helpers"));
         helperRepository.save(helper);
         storageService.delete(previous);
-        return HelperResponse.from(helper);
+        return HelperResponse.forOwner(helper);
     }
 
     @Override
@@ -357,15 +370,33 @@ public class TransporterServiceImpl implements TransporterService {
     public void deleteHelper(Long userId, Long helperId) {
         Helper helper = findOwnedHelper(userId, helperId);
         String photo = helper.getPhotoUrl();
+        // Revoga o acesso e desfaz a escala antes; a conta fica (desativada) para o histórico.
+        monitorAccountService.beforeHelperRemoval(helper);
         helperRepository.delete(helper);
         storageService.delete(photo);
+    }
+
+    @Override
+    @Transactional
+    public HelperResponse setHelperAccess(Long userId, Long helperId, MonitorAccessRequest request) {
+        Helper helper = findOwnedHelper(userId, helperId);
+        monitorAccountService.grantOrUpdateAccess(helper, request);
+        return HelperResponse.forOwner(helperRepository.save(helper));
+    }
+
+    @Override
+    @Transactional
+    public HelperResponse revokeHelperAccess(Long userId, Long helperId) {
+        Helper helper = findOwnedHelper(userId, helperId);
+        monitorAccountService.revokeAccess(helper);
+        return HelperResponse.forOwner(helperRepository.save(helper));
     }
 
     // ----- Helpers internos -----
 
     private TransporterProfileResponse profileResponse(TransporterProfile transporter) {
         List<HelperResponse> helpers = helperRepository.findByTransporterId(transporter.getId()).stream()
-                .map(HelperResponse::from)
+                .map(HelperResponse::forOwner)
                 .toList();
         return TransporterProfileResponse.from(transporter, helpers);
     }

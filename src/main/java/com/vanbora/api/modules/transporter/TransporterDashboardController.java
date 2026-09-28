@@ -4,6 +4,7 @@ import com.vanbora.api.modules.enrollment.dto.StudentResponse;
 import com.vanbora.api.modules.enrollment.service.StudentService;
 import com.vanbora.api.modules.hire.dto.HireRequestResponse;
 import com.vanbora.api.modules.hire.service.HireService;
+import com.vanbora.api.modules.monitor.dto.MonitorAccessRequest;
 import com.vanbora.api.modules.transporter.dto.CreateHelperRequest;
 import com.vanbora.api.modules.transporter.dto.DashboardResponse;
 import com.vanbora.api.modules.transporter.dto.HelperResponse;
@@ -95,6 +96,19 @@ public class TransporterDashboardController {
     public ResponseEntity<Void> deleteHelper(@PathVariable Long id) {
         transporterService.deleteHelper(currentUserProvider.requireUserId(), id);
         return ResponseEntity.noContent().build();
+    }
+
+    /** Cria ou atualiza o acesso ao app de um monitor (e-mail, telefone, senha provisória). */
+    @PutMapping("/helpers/{id}/access")
+    public HelperResponse setHelperAccess(@PathVariable Long id,
+                                          @Valid @RequestBody MonitorAccessRequest request) {
+        return transporterService.setHelperAccess(currentUserProvider.requireUserId(), id, request);
+    }
+
+    /** Retira o acesso do monitor ao app (efeito imediato), mantendo-o no perfil. */
+    @DeleteMapping("/helpers/{id}/access")
+    public HelperResponse revokeHelperAccess(@PathVariable Long id) {
+        return transporterService.revokeHelperAccess(currentUserProvider.requireUserId(), id);
     }
 }
 

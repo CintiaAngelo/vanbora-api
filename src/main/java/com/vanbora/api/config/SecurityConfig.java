@@ -41,6 +41,9 @@ public class SecurityConfig {
             "/api/config/**",
             // Imagens de perfil/ajudante servidas estaticamente (visíveis a responsáveis).
             "/uploads/**",
+            // Fotos do checklist de segurança: exigem URL assinada e de curta duração
+            // (validada no controller) — a imagem do app não envia o JWT.
+            "/api/media/checklist-photos/**",
             // Handshake do WebSocket; a autenticação real ocorre no CONNECT do STOMP.
             "/ws/**",
             "/v3/api-docs/**",

@@ -37,4 +37,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void configureClientInboundChannel(ChannelRegistration registration) {
         registration.interceptors(chatChannelInterceptor);
     }
+
+    /** Reconfere a participação em cada entrega (quem perdeu o vínculo para de receber). */
+    @Override
+    public void configureClientOutboundChannel(ChannelRegistration registration) {
+        registration.interceptors(chatChannelInterceptor.outbound());
+    }
 }

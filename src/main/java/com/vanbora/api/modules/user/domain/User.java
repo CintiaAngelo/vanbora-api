@@ -48,4 +48,17 @@ public class User extends BaseEntity {
     /** Identificador da conta no provedor ({@code sub} do Auth0), quando houver. */
     @Column(name = "auth_subject", length = 120)
     private String authSubject;
+
+    /**
+     * Conta habilitada para autenticar. NULLABLE (ddl-auto em tabela populada): null ⇒ ativa.
+     * Desativar revoga o acesso na hora — o usuário é recarregado do banco a cada requisição
+     * (filtro JWT) e a cada CONNECT/entrega do WebSocket. Usado para monitores desativados ou
+     * removidos pelo transportador, preservando o registro para o histórico.
+     */
+    private Boolean active = true;
+
+    /** Considera nulo como ativo (registros antigos sem a coluna preenchida). */
+    public boolean isActive() {
+        return active == null || active;
+    }
 }

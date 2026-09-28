@@ -11,7 +11,9 @@ public record StudentResponse(
         String school,
         String neighborhood,
         FinanceStatus financeStatus,
-        boolean presentToday
+        boolean presentToday,
+        /** Id do dependente (aluno) — usado para escolher os alunos de um percurso. */
+        Long dependentId
 ) {
     public static StudentResponse from(Enrollment e, boolean presentToday) {
         var dependent = e.getDependent();
@@ -23,6 +25,7 @@ public record StudentResponse(
                 dependent.getSchool(),
                 dependent.getGuardian().getNeighborhood(),
                 e.getFinanceStatus(),
-                presentToday);
+                presentToday,
+                dependent.getId());
     }
 }

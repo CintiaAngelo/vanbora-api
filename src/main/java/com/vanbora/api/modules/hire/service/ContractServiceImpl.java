@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.vanbora.api.modules.chat.service.ChatMembershipService;
 
 @Service
 public class ContractServiceImpl implements ContractService {
@@ -54,6 +55,7 @@ public class ContractServiceImpl implements ContractService {
     private final FeeCalculator feeCalculator;
     private final NotificationService notificationService;
     private final PushNotificationService pushNotificationService;
+    private final ChatMembershipService chatMembershipService;
 
     public ContractServiceImpl(ContractRepository contractRepository,
                                PaymentMethodRepository paymentMethodRepository,
@@ -66,7 +68,8 @@ public class ContractServiceImpl implements ContractService {
                                ContractTextBuilder contractTextBuilder,
                                FeeCalculator feeCalculator,
                                NotificationService notificationService,
-                               PushNotificationService pushNotificationService) {
+                               PushNotificationService pushNotificationService,
+                               ChatMembershipService chatMembershipService) {
         this.contractRepository = contractRepository;
         this.paymentMethodRepository = paymentMethodRepository;
         this.enrollmentRepository = enrollmentRepository;
@@ -79,6 +82,7 @@ public class ContractServiceImpl implements ContractService {
         this.feeCalculator = feeCalculator;
         this.notificationService = notificationService;
         this.pushNotificationService = pushNotificationService;
+        this.chatMembershipService = chatMembershipService;
     }
 
     @Override
@@ -202,6 +206,9 @@ public class ContractServiceImpl implements ContractService {
         contract.setSignedAt(Instant.now());
         contractRepository.save(contract);
 
+        // Contratação concluída: a conversa vira grupo com os monitores do(s) percurso(s) do aluno.
+        chatMembershipService.syncTransporter(contract.getTransporter().getId());
+
         return ContractResponse.from(contract);
     }
 
@@ -273,6 +280,9 @@ public class ContractServiceImpl implements ContractService {
         contract.setStatus(ContractStatus.CANCELLED);
         contract.setCancelledAt(Instant.now());
         contractRepository.save(contract);
+
+        // Sem outro filho ativo com o transportador, os monitores saem da conversa.
+        chatMembershipService.syncTransporter(transporter.getId());
 
         // Notifica o transportador automaticamente sobre a rescisão (e-mail simulado + push).
         notificationService.notifyContractCancelled(contract);

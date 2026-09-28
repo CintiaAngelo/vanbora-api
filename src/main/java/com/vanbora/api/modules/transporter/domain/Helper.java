@@ -6,6 +6,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
+import com.vanbora.api.modules.user.domain.User;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -35,8 +37,22 @@ public class Helper extends BaseEntity {
     /** Ativo no perfil público. NULLABLE (ddl-auto em tabela populada): null ⇒ ativo. */
     private Boolean active = true;
 
+    /**
+     * Conta de acesso ao app (perfil MONITOR), quando o transportador liberou o acesso.
+     * Nula para ajudantes que só aparecem no perfil público. A conta nunca é apagada:
+     * ao remover o monitor ela é desativada, preservando autoria de checklists e mensagens.
+     */
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", unique = true)
+    private User user;
+
     /** Considera nulo como ativo (registros antigos sem a coluna preenchida). */
     public boolean isActive() {
         return active == null || active;
+    }
+
+    /** Tem conta de monitor habilitada (ajudante ativo + conta ativa). */
+    public boolean hasActiveAccess() {
+        return user != null && isActive() && user.isActive();
     }
 }

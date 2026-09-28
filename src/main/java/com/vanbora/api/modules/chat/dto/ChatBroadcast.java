@@ -13,6 +13,8 @@ public record ChatBroadcast(
         Long senderUserId,
         String senderName,
         String type,
-        String mediaUrl
+        String mediaUrl,
+        /** "Responsável", "Transportador" ou "Monitor". */
+        String senderRole
 ) {
 }

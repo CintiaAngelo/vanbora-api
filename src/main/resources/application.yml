@@ -20,7 +20,8 @@ spring:
   servlet:
     multipart:
       max-file-size: 6MB
-      max-request-size: 6MB
+      # Comporta o checklist de segurança (até 5 fotos numa única requisição).
+      max-request-size: 30MB
 
   jpa:
     hibernate:
@@ -36,6 +37,11 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+  tomcat:
+    # Por padrão o Tomcat só "engole" 2 MB de um upload recusado e depois FECHA a conexão —
+    # o app via só "falha de conexão". Sem limite, ele lê o corpo e devolve o 413 com a
+    # mensagem (o tamanho máximo continua valendo pelo spring.servlet.multipart).
+    max-swallow-size: -1
 
 # Configuração da API VanBora
 vanbora:
@@ -94,6 +100,15 @@ vanbora:
   uploads:
     dir: ${VANBORA_UPLOADS_DIR:uploads}
     public-path: /uploads
+    # Área privada (NÃO servida em /uploads): fotos do checklist de segurança, entregues
+    # só por URL assinada a quem tem acesso ao percurso.
+    private-dir: ${VANBORA_UPLOADS_PRIVATE_DIR:uploads-private}
+  # Checklist de segurança pós-percurso.
+  checklist:
+    # Dias até a exclusão automática das fotos (o registro do checklist permanece).
+    photo-retention-days: ${VANBORA_CHECKLIST_PHOTO_RETENTION_DAYS:15}
+    # Máximo de fotos por checklist.
+    max-photos: 5
   # Roteamento real (rota seguindo ruas) via OpenRouteService — gratuito, free tier
   # 2000 req/dia. Sem chave configurada, a rota é desenhada em linha reta (fallback).
   # Crie uma chave grátis em https://openrouteservice.org/dev-dashboard.

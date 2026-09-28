@@ -9,6 +9,10 @@ public record MessageResponse(
         /** "TEXT" ou "IMAGE". */
         String type,
         /** URL da imagem quando type=IMAGE (relativa ao servidor). */
-        String mediaUrl
+        String mediaUrl,
+        /** Autor — em grupo, identifica quem escreveu (responsável, transportador ou monitor). */
+        String senderName,
+        /** "Responsável", "Transportador" ou "Monitor". */
+        String senderRole
 ) {
 }

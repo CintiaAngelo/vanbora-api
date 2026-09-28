@@ -14,4 +14,8 @@ public interface PushTokenRepository extends JpaRepository<PushToken, Long> {
 
     @Transactional
     void deleteByTokenAndUserId(String token, Long userId);
+
+    /** Remove todos os aparelhos do usuário (conta desativada não deve mais receber push). */
+    @Transactional
+    void deleteByUserId(Long userId);
 }

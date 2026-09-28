@@ -21,17 +21,77 @@ public class StorageService {
 
     private final Path root;
     private final String publicPath;
+    /** Área PRIVADA (fora do diretório servido em /uploads): arquivos só saem por endpoint autorizado. */
+    private final Path privateRoot;
 
     public StorageService(
             @Value("${vanbora.uploads.dir:uploads}") String dir,
-            @Value("${vanbora.uploads.public-path:/uploads}") String publicPath) {
+            @Value("${vanbora.uploads.public-path:/uploads}") String publicPath,
+            @Value("${vanbora.uploads.private-dir:uploads-private}") String privateDir) {
         this.root = Paths.get(dir).toAbsolutePath().normalize();
         this.publicPath = publicPath;
+        this.privateRoot = Paths.get(privateDir).toAbsolutePath().normalize();
+        if (privateRoot.startsWith(root)) {
+            // Dentro de /uploads o arquivo ficaria acessível sem autenticação.
+            throw new IllegalStateException("vanbora.uploads.private-dir não pode ficar dentro do diretório público.");
+        }
         try {
             Files.createDirectories(root);
+            Files.createDirectories(privateRoot);
         } catch (IOException e) {
             throw new IllegalStateException("Não foi possível criar o diretório de uploads: " + root, e);
         }
+    }
+
+    /**
+     * Salva a imagem na área privada e devolve a CHAVE interna (ex.: {@code checklists/uuid.jpg}),
+     * que nunca é uma URL: o arquivo só é lido por {@link #loadPrivate} após checagem de acesso.
+     */
+    public String storePrivate(MultipartFile file, String subfolder) {
+        validateImage(file);
+        try {
+            Path dir = privateRoot.resolve(subfolder).normalize();
+            if (!dir.startsWith(privateRoot)) {
+                throw new BusinessException("Destino de upload inválido.");
+            }
+            Files.createDirectories(dir);
+            String filename = UUID.randomUUID() + extension(file);
+            file.transferTo(dir.resolve(filename));
+            return subfolder + "/" + filename;
+        } catch (IOException e) {
+            throw new BusinessException("Falha ao salvar a imagem.");
+        }
+    }
+
+    /** Caminho do arquivo privado (null se a chave for inválida ou o arquivo não existir). */
+    public Path loadPrivate(String key) {
+        Path target = resolvePrivate(key);
+        return target != null && Files.isRegularFile(target) ? target : null;
+    }
+
+    /**
+     * Apaga um arquivo privado. Idempotente: arquivo já inexistente conta como apagado.
+     * Devolve false só quando a exclusão falhou (para a rotina de retenção tentar de novo).
+     */
+    public boolean deletePrivate(String key) {
+        Path target = resolvePrivate(key);
+        if (target == null) {
+            return true;
+        }
+        try {
+            Files.deleteIfExists(target);
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private Path resolvePrivate(String key) {
+        if (key == null || key.isBlank()) {
+            return null;
+        }
+        Path target = privateRoot.resolve(key).normalize();
+        return target.startsWith(privateRoot) ? target : null;
     }
 
     /**

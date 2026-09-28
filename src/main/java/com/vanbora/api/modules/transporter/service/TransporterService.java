@@ -69,5 +69,16 @@ public interface TransporterService {
 
     HelperResponse setHelperPhoto(Long userId, Long helperId, MultipartFile file);
 
+    /**
+     * Exclui o ajudante. Se ele for monitor com acesso, a conta é desativada (não apagada) e
+     * ele sai dos percursos e conversas; checklists e mensagens antigos permanecem.
+     */
     void deleteHelper(Long userId, Long helperId);
+
+    /** Cria/atualiza o acesso ao app de um ajudante com a função Monitor. */
+    HelperResponse setHelperAccess(Long userId, Long helperId,
+                                   com.vanbora.api.modules.monitor.dto.MonitorAccessRequest request);
+
+    /** Retira o acesso ao app do monitor (revogação imediata), mantendo-o no perfil. */
+    HelperResponse revokeHelperAccess(Long userId, Long helperId);
 }

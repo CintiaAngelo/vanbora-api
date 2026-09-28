@@ -38,6 +38,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  *  - Responsável:    mariana@vanbora.com
  *  - Transportador:  roberto@vanbora.com
  *  - Escola:         secretaria@objetivo.com.br
+ *  - Monitor:        monitor.carlos@vanbora.com (equipe do Roberto)
  */
 @Configuration
 public class DataSeeder {
@@ -60,6 +61,7 @@ public class DataSeeder {
             ReviewService reviewService,
             SchoolRepository schoolRepository,
             DemoDataSeeder demoDataSeeder,
+            MonitorDemoSeeder monitorDemoSeeder,
             PasswordEncoder passwordEncoder) {
 
         return args -> {
@@ -81,6 +83,7 @@ public class DataSeeder {
                 seedSchoolAccount(userRepository, schoolRepository, passwordEncoder.encode(DEFAULT_PASSWORD));
                 // Recalcula média/contagem reais a partir das avaliações (corrige valores fixos antigos).
                 transporterRepository.findAll().forEach(reviewService::recompute);
+                monitorDemoSeeder.seed(passwordEncoder.encode(DEFAULT_PASSWORD));
                 return;
             }
 
@@ -97,6 +100,9 @@ public class DataSeeder {
 
             // Painel de gestão da escola: vincula os dependentes ao catálogo de escolas.
             backfillSchoolRefs(schoolRepository, dependentRepository);
+
+            // Perfil Monitor: conta do Carlos + percursos de demonstração.
+            monitorDemoSeeder.seed(password);
         };
     }
 

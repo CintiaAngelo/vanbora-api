@@ -65,6 +65,11 @@ public class SocialAuthService {
         }
 
         User user = existing.get();
+        if (!user.isActive()) {
+            // Mesma regra do login por senha: conta desativada não recebe sessão.
+            throw new com.vanbora.api.shared.exception.UnauthorizedException(
+                    "Este acesso foi desativado. Fale com o transportador responsável.");
+        }
         linkProvider(user, identity);
         return SocialAuthResponse.loggedIn(buildSession(user), profile);
     }
